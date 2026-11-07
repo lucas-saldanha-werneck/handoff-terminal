@@ -1,0 +1,133 @@
+"""Text checks used by the hooks: the hand-off marker, refusals, sign-in words and the site gate.
+
+English and Portuguese wording is covered. All checks run on norm() text (lower case,
+no accents, straight quotes), so "I can’t" and "não posso" match like "i can't" / "nao posso".
+"""
+import re
+
+from common import MARKER, compact, norm
+
+# Words that mean "sign in / secret / identity number" (the things the app refuses to type).
+SENSITIVE = re.compile(
+    r"\b(password|passcode|passphrase|passwd|credentials?|log ?in|log ?into|login|log on|log me in|"
+    r"sign ?in|sign ?into|signin|sign me in|"
+    r"username|user name|one[- ]time (code|password)|otp|2fa|two[- ]factor|verification code|"
+    r"security code|pin|social security|ssn|tax id|taxpayer id|tin|itin|national id|government id|"
+    r"id number|passport|driver'?s licen[cs]e|"
+    r"senha|cpf|cnpj|rg|cnh|credenciais?|credencial|logar|logue|fazer login|entr(e|ar|a) na (minha )?conta|"
+    r"codigo de (verificacao|acesso|seguranca)|documento de identidade|passaporte|"
+    r"contrasena|dni|nie)\b")
+
+# Wording of a refusal to do the step.
+_REFUSE_EN = (
+    r"\b(i (can't|cant|cannot|can not|won't|will not|don't|do not|shouldn't|should not|must not)|"
+    r"i(?:'m| am| m)? (not able to|unable to|not allowed to|not permitted to))\b"
+    r"[^.!?\n]{0,60}?\b(enter|type|fill|input|submit|provide|use|log|sign|paste|key|handle|share|complete|"
+    r"do (this|that|it))"
+    r"|\bnot (allowed|permitted|able) to (enter|type|fill|input|submit|log|sign)"
+    r"|\b(i am|i'm) (prohibited|forbidden)\b|\b(prohibited|forbidden) for me\b"
+    r"|\bagainst my (rules|guidelines|instructions)\b"
+    r"|\bfor (security|safety|privacy) reasons\b"
+    r"|\byou('ll| will)? (need|have) to (enter|type|fill|do|log|sign|complete)[^.!?\n]{0,40}\byourself\b"
+    r"|\bplease (enter|type|fill|complete)[^.!?\n]{0,60}\byourself\b")
+_REFUSE_PT = (
+    r"\bnao (posso|consigo|vou|devo|tenho permissao para|me e permitido|e permitido|estou autorizad[oa] a)\b"
+    r"[^.!?\n]{0,60}?\b(digitar|preencher|inserir|colocar|informar|entrar|logar|fazer login|usar|enviar|submeter|"
+    r"colar|completar|fazer (isso|esse passo))"
+    r"|\bregra fixa\b|\bmesmo com (o )?seu pedido\b|\bmesmo que voce (peca|autorize)\b"
+    r"|\bpor (motivos? de )?seguranca\b"
+    r"|\b(voce|vc) (mesmo|mesma) (precisa|tera|vai ter|deve)\b")
+REFUSE = re.compile(_REFUSE_EN + "|" + _REFUSE_PT)
+
+_SENTENCE = re.compile(r"(?<=[.!?;:])\s+|\n+")
+
+# The marker must be the last non-empty line: HANDOFF-TERMINAL: <site> | <step>
+_MARKER_LINE = re.compile(
+    r"^\s*[`*_\"']*" + MARKER + r"\s*:\s*(?P<body>.*?)\s*[`*_\"']*\s*$", re.I)
+
+# Two-part public suffixes, so "zonasul.com.br" -> "zonasul" and "gov.uk" sites work.
+_SUFFIX2 = {"com.br", "net.br", "org.br", "gov.br", "edu.br", "co.uk", "org.uk", "gov.uk", "ac.uk",
+            "com.au", "net.au", "gov.au", "co.nz", "co.jp", "co.in", "com.mx", "com.ar", "com.co",
+            "co.za", "com.pt", "com.es", "com.tr", "com.sg", "com.hk", "co.kr"}
+
+
+def sentences(text):
+    return [s for s in _SENTENCE.split(norm(text)) if s.strip()]
+
+
+def mentions_sensitive(text):
+    return bool(SENSITIVE.search(norm(text)))
+
+
+def is_refusal(text):
+    """A sentence (or a sentence plus the next one) that refuses AND names a sign-in/secret item."""
+    parts = sentences(text)
+    for i, part in enumerate(parts):
+        if REFUSE.search(part):
+            window = part + " " + (parts[i + 1] if i + 1 < len(parts) else "")
+            if SENSITIVE.search(part) or SENSITIVE.search(window):
+                return True
+    return False
+
+
+def parse_marker(text):
+    """Return (site, step) when the LAST non-empty line is the marker, (None, None) if there is
+    no marker, and ("", "") when the marker is there but malformed.
+
+    The last-line rule keeps quotes and examples in the middle of a reply from acting:
+    a reply that only mentions the marker never ends with it.
+    """
+    lines = [ln for ln in (text or "").replace("\r", "").split("\n") if ln.strip()]
+    if not lines:
+        return None, None
+    last = lines[-1].translate({0x2019: "'", 0x201c: '"', 0x201d: '"'})
+    if last.lstrip().startswith(">"):
+        return None, None  # a block quote is someone else's text
+    if sum(1 for ln in lines if ln.strip().startswith("```")) % 2 == 1:
+        return None, None  # still inside an open code block
+    m = _MARKER_LINE.match(last)
+    if not m:
+        return None, None
+    body = m.group("body")
+    if "|" not in body:
+        return "", ""
+    site, step = (part.strip(" `*_\"'") for part in body.split("|", 1))
+    if not site_key(site) or not step:
+        return "", ""
+    return site, step[:300]
+
+
+def site_host(site):
+    s = norm(site).strip()
+    s = re.sub(r"^[a-z][a-z0-9+.-]*://", "", s)
+    s = s.split("/")[0].split("?")[0].split("#")[0].split("@")[-1].split(":")[0]
+    return s[4:] if s.startswith("www.") else s
+
+
+def site_key(site):
+    """Main name of a site: "https://login.zonasul.com.br/x" -> "zonasul", "Zona Sul" -> "zonasul"."""
+    host = site_host(site)
+    if "." not in host:
+        return compact(site)
+    labels = [lb for lb in host.split(".") if lb]
+    if len(labels) >= 3 and ".".join(labels[-2:]) in _SUFFIX2:
+        labels = labels[:-2]
+    elif len(labels) >= 2:
+        labels = labels[:-1]
+    return compact(labels[-1]) if labels else ""
+
+
+def site_authorized(site, user_texts):
+    """True when the user's own messages name the site. This check runs in code, outside the
+    model, so text from a web page cannot add a new site on its own.
+
+    Short names (under 4 letters, like "x.com" or "ssa.gov") must appear with their domain ending.
+    """
+    key = site_key(site)
+    if not key:
+        return False
+    said = compact(" ".join(user_texts or []))
+    if len(key) >= 4:
+        return key in said
+    host = compact(site_host(site))
+    return bool(host) and host in said

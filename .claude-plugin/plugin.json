@@ -1,0 +1,24 @@
+{
+  "name": "handoff-terminal",
+  "version": "0.1.0",
+  "description": "When the Claude desktop app won't sign in to a site for you, a terminal Claude Code session does that one step and the app carries on.",
+  "author": { "name": "Lucas Saldanha Werneck", "url": "https://github.com/lucas-saldanha-werneck" },
+  "homepage": "https://github.com/lucas-saldanha-werneck/handoff-terminal",
+  "repository": "https://github.com/lucas-saldanha-werneck/handoff-terminal",
+  "license": "MIT",
+  "keywords": ["desktop", "claude-in-chrome", "login", "credentials", "hooks", "tmux"],
+  "userConfig": {
+    "launcher": {
+      "type": "string",
+      "title": "Launcher (optional)",
+      "description": "Program that starts the terminal session. It gets <folder> <name> <first message>. Empty = the bundled bin/handoff-launch (tmux + claude --remote-control).",
+      "default": ""
+    },
+    "notes_file": {
+      "type": "string",
+      "title": "Setup notes file (optional)",
+      "description": "Markdown file with your own instructions for the terminal session: which password manager CLI and which browser to use. Empty = ~/.config/handoff-terminal/notes.md",
+      "default": ""
+    }
+  }
+}

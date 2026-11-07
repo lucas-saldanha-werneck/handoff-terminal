@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""handoff-launch <folder> <name> <first message>
+
+Default launcher: starts `claude` in a new detached tmux session in <folder>, with
+<first message> as its first prompt. Remote Control is on, so the session shows up in
+the Claude app session list on desktop and phone. Claude in Chrome is off (--no-chrome),
+because loading it would bring back the same browser rules.
+
+Replace it with your own launcher in the plugin settings (option "launcher"); it gets the
+same three arguments and must exit 0 once the session has started.
+HANDOFF_REMOTE_CONTROL=0 starts the session without Remote Control.
+"""
+import os
+import re
+import secrets
+import shlex
+import shutil
+import subprocess
+import sys
+
+# Variables a desktop app session passes to its children. The new session must not inherit
+# them, or it would think it is running inside the app.
+INHERITED = re.compile(r"^(CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDECODE$|CLAUDE_PID$|CLAUDE_PLUGIN_)")
+
+
+def trusted(folder):
+    """Claude Code asks "Do you trust this folder?" in a folder it has not seen; nobody is there to
+    answer in a hidden tmux session. Trust given to a parent folder counts for its children."""
+    import json
+    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~")
+    try:
+        with open(os.path.join(base, ".claude.json"), encoding="utf-8") as f:
+            projects = json.load(f).get("projects") or {}
+    except (OSError, ValueError):
+        return True  # cannot tell; let claude decide
+    path = os.path.realpath(folder)
+    while True:
+        if (projects.get(path) or {}).get("hasTrustDialogAccepted"):
+            return True
+        parent = os.path.dirname(path)
+        if parent == path:
+            return False
+        path = parent
+
+
+def main():
+    if len(sys.argv) != 4:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    folder, name, prompt = sys.argv[1:]
+    if not trusted(folder):
+        print("handoff-launch: Claude Code does not trust %s yet, so a hidden session there would stop "
+              "at the trust question. Run `claude` in that folder once and accept, then try again."
+              % folder, file=sys.stderr)
+        return 1
+    tmux = shutil.which("tmux")
+    if not tmux:
+        print("handoff-launch: tmux is not installed (macOS: brew install tmux)", file=sys.stderr)
+        return 1
+    if not os.path.isdir(folder):
+        print("handoff-launch: no such folder: %s" % folder, file=sys.stderr)
+        return 1
+    session = "handoff-%s-%s" % (re.sub(r"[^A-Za-z0-9_-]+", "-", name).strip("-")[:40], secrets.token_hex(2))
+    claude = ["claude", "--no-chrome", "--name", name]
+    if os.environ.get("HANDOFF_REMOTE_CONTROL", "1") != "0":
+        claude += ["--remote-control", name]
+    claude.append(prompt)
+    unset = ["-u %s" % shlex.quote(k) for k in sorted(os.environ) if INHERITED.match(k)]
+    inner = "exec env %s HANDOFF_CHILD=1 %s" % (" ".join(unset), " ".join(shlex.quote(a) for a in claude))
+    shell = os.environ.get("SHELL") or "/bin/sh"
+    # A login shell gives the session the user's normal PATH (where `claude` lives).
+    r = subprocess.run([tmux, "new-session", "-d", "-s", session, "-c", folder, shell, "-lc", inner],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print("handoff-launch: tmux failed: %s" % (r.stderr or r.stdout).strip(), file=sys.stderr)
+        return 1
+    print("started tmux session %s (attach: tmux attach -t %s)" % (session, session))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
