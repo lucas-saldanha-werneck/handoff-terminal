@@ -3,7 +3,8 @@
 
 Run by the terminal session when the sign-in step is over. Records the result that the
 desktop app is waiting for, then closes this tmux session 20 seconds later (only when
-the session was started for a hand-off). HANDOFF_NO_CLOSE=1 keeps the session open.
+the session was started for a hand-off, in tmux or without a window).
+HANDOFF_NO_CLOSE=1 keeps the session open.
 """
 import json
 import os
@@ -19,9 +20,33 @@ import common as c  # noqa: E402
 OWN_SESSION = re.compile(r"(^|-)handoff-")
 
 
-def close_own_tmux_session():
+def close_later(command, label):
+    subprocess.Popen(["/bin/sh", "-c", "sleep 20; exec " + command[0], "sh"] + command[1:],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+    print("this terminal session (%s) closes in 20 s" % label)
+
+
+def close_windowless_session():
+    """Sessions started without tmux: handoff-launch exported HANDOFF_PGID."""
+    pgid = os.environ.get("HANDOFF_PGID", "")
+    if not pgid.isdigit() or int(pgid) <= 1:
+        return
+    try:
+        cmd = subprocess.run(["ps", "-o", "command=", "-p", pgid], capture_output=True, text=True,
+                             timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    if "HANDOFF_CHILD=1" in cmd:  # only a group that handoff-launch started
+        close_later(['kill -TERM -- "-$1"', pgid], "process group %s" % pgid)
+
+
+def close_own_session():
+    if os.environ.get("HANDOFF_NO_CLOSE"):
+        return
     pane = os.environ.get("TMUX_PANE")
-    if not (os.environ.get("TMUX") and pane) or os.environ.get("HANDOFF_NO_CLOSE"):
+    if not (os.environ.get("TMUX") and pane):
+        close_windowless_session()
         return
     try:
         out = subprocess.run(["tmux", "display-message", "-p", "-t", pane, "#{session_id} #{session_name}"],
@@ -32,10 +57,7 @@ def close_own_tmux_session():
     if not sid.startswith("$") or not OWN_SESSION.search(sname):
         return
     # session_id ($N) never changes for the life of the session, unlike its name.
-    subprocess.Popen(["/bin/sh", "-c", 'sleep 20; exec tmux kill-session -t "$1"', "sh", sid],
-                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     start_new_session=True)
-    print("this terminal session (%s) closes in 20 s" % sname)
+    close_later(['tmux kill-session -t "$1"', sid], sname)
 
 
 def main():
@@ -51,7 +73,7 @@ def main():
         ensure_ascii=False))
     c.log("done id=%s status=%s" % (hid, status))
     print("recorded %s for hand-off %s" % (status, hid))
-    close_own_tmux_session()
+    close_own_session()
     return 0
 
 

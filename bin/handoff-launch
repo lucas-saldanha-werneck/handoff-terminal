@@ -6,10 +6,14 @@ Default launcher: starts `claude` in a new detached tmux session in <folder>, wi
 the Claude app session list on desktop and phone. Claude in Chrome is off (--no-chrome),
 because loading it would bring back the same browser rules.
 
+No tmux: runs the session in a pseudo-terminal made by `script` (part of macOS and Linux),
+with no window. Follow it through Remote Control. HANDOFF_NO_TMUX=1 forces this mode.
+
 Replace it with your own launcher in the plugin settings (option "launcher"); it gets the
 same three arguments and must exit 0 once the session has started.
 HANDOFF_REMOTE_CONTROL=0 starts the session without Remote Control.
 """
+import json
 import os
 import re
 import secrets
@@ -22,11 +26,9 @@ import sys
 # them, or it would think it is running inside the app.
 INHERITED = re.compile(r"^(CLAUDE_CODE_|CLAUDE_AGENT_SDK_|CLAUDECODE$|CLAUDE_PID$|CLAUDE_PLUGIN_)")
 
-
 def trusted(folder):
     """Claude Code asks "Do you trust this folder?" in a folder it has not seen; nobody is there to
     answer in a hidden tmux session. Trust given to a parent folder counts for its children."""
-    import json
     base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~")
     try:
         with open(os.path.join(base, ".claude.json"), encoding="utf-8") as f:
@@ -45,41 +47,75 @@ def trusted(folder):
         path = parent
 
 
+def claude_command(name, prompt, environ):
+    """Shell command that starts claude clean: no inherited app variables, HANDOFF_CHILD=1."""
+    claude = ["claude", "--no-chrome", "--name", name]
+    if environ.get("HANDOFF_REMOTE_CONTROL", "1") != "0":
+        claude += ["--remote-control", name]
+    claude.append(prompt)
+    unset = ["-u %s" % shlex.quote(k) for k in sorted(environ) if INHERITED.match(k)]
+    return "exec env %s HANDOFF_CHILD=1 %s" % (" ".join(unset), " ".join(shlex.quote(a) for a in claude))
+
+
+def session_name(name):
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", name).strip("-")[:40]
+    if not slug.startswith("handoff-"):
+        slug = "handoff-" + slug
+    return "%s-%s" % (slug, secrets.token_hex(2))
+
+
+def tmux_argv(tmux, folder, name, inner, shell):
+    # A login shell gives the session the user's normal PATH (where `claude` lives).
+    return [tmux, "new-session", "-d", "-s", session_name(name), "-c", folder, shell, "-lc", inner]
+
+
+def pty_command(inner, shell, platform):
+    """Shell command that runs `inner` in a pseudo-terminal with no window.
+
+    `tail -f /dev/null` keeps the input open, so the session waits instead of reading end-of-file.
+    HANDOFF_PGID lets handoff-done close the whole process group when the step is over.
+    """
+    login = "%s -lc %s" % (shlex.quote(shell), shlex.quote(inner))
+    if platform == "darwin":
+        pty = "script -q /dev/null " + login
+    else:  # util-linux
+        pty = "script -q -c %s /dev/null" % shlex.quote(login)
+    return "export HANDOFF_PGID=$$; tail -f /dev/null | " + pty
+
+
 def main():
     if len(sys.argv) != 4:
         print(__doc__.strip(), file=sys.stderr)
         return 2
     folder, name, prompt = sys.argv[1:]
-    if not trusted(folder):
-        print("handoff-launch: Claude Code does not trust %s yet, so a hidden session there would stop "
-              "at the trust question. Run `claude` in that folder once and accept, then try again."
-              % folder, file=sys.stderr)
-        return 1
-    tmux = shutil.which("tmux")
-    if not tmux:
-        print("handoff-launch: tmux is not installed (macOS: brew install tmux)", file=sys.stderr)
-        return 1
     if not os.path.isdir(folder):
         print("handoff-launch: no such folder: %s" % folder, file=sys.stderr)
         return 1
-    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", name).strip("-")[:40]
-    if not slug.startswith("handoff-"):
-        slug = "handoff-" + slug
-    session = "%s-%s" % (slug, secrets.token_hex(2))
-    claude = ["claude", "--no-chrome", "--name", name]
-    if os.environ.get("HANDOFF_REMOTE_CONTROL", "1") != "0":
-        claude += ["--remote-control", name]
-    claude.append(prompt)
-    unset = ["-u %s" % shlex.quote(k) for k in sorted(os.environ) if INHERITED.match(k)]
-    inner = "exec env %s HANDOFF_CHILD=1 %s" % (" ".join(unset), " ".join(shlex.quote(a) for a in claude))
-    shell = os.environ.get("SHELL") or "/bin/sh"
-    # A login shell gives the session the user's normal PATH (where `claude` lives).
-    r = subprocess.run([tmux, "new-session", "-d", "-s", session, "-c", folder, shell, "-lc", inner],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        print("handoff-launch: tmux failed: %s" % (r.stderr or r.stdout).strip(), file=sys.stderr)
+    if not trusted(folder):
+        print("handoff-launch: Claude Code does not trust %s yet, so a new session there would stop "
+              "at the trust question. Run `claude` in that folder once and accept, then try again."
+              % folder, file=sys.stderr)
         return 1
-    print("started tmux session %s (attach: tmux attach -t %s)" % (session, session))
+    inner = claude_command(name, prompt, os.environ)
+    shell = os.environ.get("SHELL") or "/bin/sh"
+    tmux = None if os.environ.get("HANDOFF_NO_TMUX") else shutil.which("tmux")
+    if not tmux:
+        if not shutil.which("script"):
+            print("handoff-launch: needs tmux or script (brew install tmux)", file=sys.stderr)
+            return 1
+        p = subprocess.Popen(["/bin/sh", "-c", pty_command(inner, shell, sys.platform)], cwd=folder,
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        print("started without a window (process group %d; follow it through Remote Control)" % p.pid)
+        return 0
+    argv = tmux_argv(tmux, folder, name, inner, shell)
+    done = "started tmux session %s (attach: tmux attach -t %s)" % (argv[4], argv[4])
+    r = subprocess.run(argv, capture_output=True, text=True)
+    if r.returncode != 0:
+        print("handoff-launch: %s failed: %s" % (os.path.basename(argv[0]), (r.stderr or r.stdout).strip()),
+              file=sys.stderr)
+        return 1
+    print(done)
     return 0
 
 

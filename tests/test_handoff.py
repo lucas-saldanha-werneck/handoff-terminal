@@ -340,6 +340,35 @@ class LaunchTrustTest(unittest.TestCase):
                     os.environ["CLAUDE_CONFIG_DIR"] = old
 
 
+class LaunchCommandTest(unittest.TestCase):
+    def setUp(self):
+        import importlib.machinery
+        import importlib.util
+        loader = importlib.machinery.SourceFileLoader("handoff_launch2", os.path.join(BIN, "handoff-launch"))
+        spec = importlib.util.spec_from_loader("handoff_launch2", loader)
+        self.launch = importlib.util.module_from_spec(spec)
+        loader.exec_module(self.launch)
+
+    def test_claude_command_is_clean(self):
+        cmd = self.launch.claude_command("handoff x 0101", "it's a test; echo pwned",
+                                         {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop", "HOME": "/h"})
+        self.assertIn("-u CLAUDE_CODE_ENTRYPOINT", cmd)
+        self.assertIn("HANDOFF_CHILD=1", cmd)
+        self.assertIn("--no-chrome", cmd)
+        self.assertIn("'it'\"'\"'s a test; echo pwned'", cmd)  # one quoted argument, not shell code
+
+    def test_session_name(self):
+        self.assertTrue(self.launch.session_name("handoff zonasul 0222").startswith("handoff-zonasul-0222-"))
+        self.assertTrue(self.launch.session_name("terminal 0222").startswith("handoff-terminal-0222-"))
+
+    def test_windowless_command(self):
+        mac = self.launch.pty_command("exec env HANDOFF_CHILD=1 claude 'x'", "/bin/zsh", "darwin")
+        self.assertTrue(mac.startswith("export HANDOFF_PGID=$$; tail -f /dev/null | script -q /dev/null /bin/zsh -lc "))
+        linux = self.launch.pty_command("exec claude", "/bin/bash", "linux")
+        self.assertIn("script -q -c ", linux)
+        self.assertTrue(linux.endswith(" /dev/null"))
+
+
 class DoneWaitTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
