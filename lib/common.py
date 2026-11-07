@@ -286,6 +286,14 @@ def password_clis():
     return found
 
 
+def done_effect(windows=None):
+    """What handoff-done does after it records the result, as told to the terminal session."""
+    if WINDOWS if windows is None else windows:
+        return ("It records the result for the app. On Windows this window does not close by itself: "
+                "after the command, stop and leave the window for the user to close.")
+    return "It records the result for the app and closes this terminal session 20 seconds later."
+
+
 # ---------------------------------------------------------------- version
 
 def plugin_version(root=None):

@@ -470,6 +470,15 @@ class PasswordManagerTest(unittest.TestCase):
                 text = f.read()
             self.assertIn("Bitwarden (`bw`)", text)
             self.assertIn("KeePassXC (`keepassxc-cli`)", text)
+            # The closing line matches what handoff-done does on this OS.
+            self.assertIn(c.done_effect(), text)
+
+    def test_done_effect_per_os(self):
+        import common as c
+        self.assertIn("20 seconds", c.done_effect(windows=False))
+        win = c.done_effect(windows=True)
+        self.assertNotIn("20 seconds", win)
+        self.assertIn("does not close by itself", win)
 
 
 class WindowsCommandTest(unittest.TestCase):

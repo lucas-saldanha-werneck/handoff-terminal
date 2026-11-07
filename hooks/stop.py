@@ -144,7 +144,7 @@ Rules:
 6. Finish with exactly one of these commands (one short sentence, no secrets):
    - signed in: `{done} {hid} ok "<what you did, which browser and tab>"`
    - not signed in: `{done} {hid} error "<what went wrong>"`
-   It records the result for the app and closes this terminal session 20 seconds later.
+   {c.done_effect()}
 
 ## The user's own recent messages in the app (newest last)
 
