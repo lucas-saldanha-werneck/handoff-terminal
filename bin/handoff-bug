@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""handoff-bug draft "<what went wrong>"   |   handoff-bug send <file> --title "<title>"
+
+Used by the /handoff-terminal:bug command.
+draft: writes a bug report (versions + the last log lines with sites, paths and ids removed)
+       to the state folder (mode 0600) and prints it. Nothing leaves the machine.
+send:  opens the GitHub issue. With a signed-in `gh`, it runs `gh issue create`. Without it,
+       it opens the browser on a new issue with the report already filled in.
+"""
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+import urllib.parse
+import webbrowser
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib"))
+import common as c  # noqa: E402
+
+REPO = "lucas-saldanha-werneck/handoff-terminal"
+LOG_LINES = 20
+URL_BODY_MAX = 6000  # long URLs fail in some browsers
+
+
+def run(cmd):
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    text = (out.stdout or out.stderr or "").strip()
+    return text.splitlines()[0] if text else ""
+
+
+def os_name():
+    if sys.platform == "darwin":
+        return "macOS " + (platform.mac_ver()[0] or "?") + " " + platform.machine()
+    return platform.system() + " " + platform.release() + " " + platform.machine()
+
+
+def redact(line):
+    """Keep the event and status. Drop what can identify the person: sites, ids, paths, command lines."""
+    line = line.replace(os.path.expanduser("~"), "~")
+    line = re.sub(r"\bout=.*$", "out=<hidden>", line)
+    line = re.sub(r"\b(site|sid|id|name)=\S+", r"\1=<hidden>", line)
+    line = re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", "<email>", line)
+    line = re.sub(r"(~|/Users|/home)/\S+", "<path>", line)
+    return line
+
+
+def log_tail():
+    try:
+        with open(os.path.join(c.STATE, "handoff.log"), encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()[-LOG_LINES:]
+    except OSError:
+        return "(no log yet)"
+    return "\n".join(redact(x) for x in lines) or "(log is empty)"
+
+
+def draft(summary):
+    launcher = "default" if c.LAUNCHER == os.path.join(c.BIN, "handoff-launch") else "custom"
+    tmux = run(["tmux", "-V"]) if shutil.which("tmux") else "not installed"
+    report = "\n".join([
+        "## What happened",
+        "",
+        summary.strip() or "(describe what went wrong)",
+        "",
+        "## Environment",
+        "",
+        "- handoff-terminal: %s" % c.plugin_version(),
+        "- Claude Code: %s" % (run(["claude", "--version"]) or "unknown"),
+        "- OS: %s" % os_name(),
+        "- Python: %s" % platform.python_version(),
+        "- tmux: %s" % (tmux or "unknown"),
+        "- scope: %s, launcher: %s" % (c.SCOPE, launcher),
+        "",
+        "## Last log lines (sites, ids and paths removed)",
+        "",
+        "```",
+        log_tail(),
+        "```",
+        "",
+        "_Sent with /handoff-terminal:bug_",
+        "",
+    ])
+    path = c.state_path("bug-report.md")
+    c.write_private(path, report)
+    print("REPORT FILE: %s" % path)
+    print("----- report -----")
+    print(report)
+
+
+def gh_ready():
+    return bool(shutil.which("gh")) and subprocess.run(
+        ["gh", "auth", "status"], capture_output=True).returncode == 0
+
+
+def send(path, title):
+    if not os.path.isfile(path):
+        sys.exit("handoff-bug: no report at %s. Run draft first." % path)
+    with open(path, encoding="utf-8") as f:
+        body = f.read()
+    title = c.one_line(title, 120) or "Bug report"
+    if gh_ready() and not os.environ.get("HANDOFF_BUG_NO_GH"):
+        err = ""
+        for extra in (["--label", "bug"], []):  # the label may be missing
+            out = subprocess.run(["gh", "issue", "create", "--repo", REPO, "--title", title,
+                                  "--body-file", path] + extra, capture_output=True, text=True)
+            if out.returncode == 0:
+                print("SENT: " + out.stdout.strip().splitlines()[-1])
+                return
+            err = out.stderr.strip()[:200]
+        print("gh could not create the issue (%s). Using the browser instead." % err)
+    if len(body) > URL_BODY_MAX:
+        body = body[:URL_BODY_MAX] + "\n…(cut to fit the link)"
+    url = "https://github.com/%s/issues/new?%s" % (REPO, urllib.parse.urlencode(
+        {"title": title, "body": body, "labels": "bug"}))
+    opened = not os.environ.get("HANDOFF_BUG_NO_BROWSER") and webbrowser.open(url)
+    print(("OPENED IN BROWSER. Press Submit there: " if opened else "OPEN THIS LINK and press Submit: ") + url)
+
+
+def main(argv):
+    if argv[:1] == ["draft"]:
+        draft(" ".join(argv[1:]))
+    elif argv[:1] == ["send"] and len(argv) >= 2:
+        title = ""
+        if "--title" in argv:
+            i = argv.index("--title")
+            title = " ".join(argv[i + 1:i + 2])
+        send(argv[1], title)
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

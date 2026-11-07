@@ -422,5 +422,124 @@ class DoneWaitTest(unittest.TestCase):
         self.assertEqual(self.cmd("handoff-wait", "id-6", "2").returncode, 1)
 
 
+class VersionTest(unittest.TestCase):
+    def test_compare(self):
+        import common as c
+        self.assertTrue(c.is_newer("0.5.0", "0.4.1"))
+        self.assertTrue(c.is_newer("0.10.0", "0.9.9"))
+        self.assertTrue(c.is_newer("v1.0", "0.99"))
+        self.assertFalse(c.is_newer("0.4.1", "0.4.1"))
+        self.assertFalse(c.is_newer("0.4.0", "0.4.1"))
+        self.assertFalse(c.is_newer("", "0.4.1"))
+        self.assertEqual(c.version_tuple("1.2.3-beta"), (1, 2, 3))
+
+
+class UpdateCheckTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.remote = os.path.join(self.tmp.name, "remote.json")
+        self.env = dict(os.environ, HANDOFF_STATE_DIR=os.path.join(self.tmp.name, "state"),
+                        HANDOFF_UPDATE_SYNC="1", HANDOFF_UPDATE_URL="file://" + self.remote)
+        for k in ("HANDOFF_NO_UPDATE_CHECK", "HANDOFF_CHILD"):
+            self.env.pop(k, None)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def remote_version(self, v):
+        with open(self.remote, "w") as f:
+            json.dump({"name": "handoff-terminal", "version": v}, f)
+
+    def run_hook(self, source="startup", env=None):
+        r = subprocess.run([sys.executable, os.path.join(HOOKS, "update_check.py")],
+                           input=json.dumps({"hook_event_name": "SessionStart", "source": source}),
+                           capture_output=True, text=True, env=env or self.env, timeout=20)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return json.loads(r.stdout) if r.stdout.strip() else None
+
+    def cache(self):
+        with open(os.path.join(self.tmp.name, "state", "update-check.json")) as f:
+            return json.load(f)
+
+    def test_newer_version_shows_once_a_day(self):
+        self.remote_version("99.0.0")
+        self.assertIsNone(self.run_hook())          # first start only fetches
+        self.assertEqual(self.cache()["latest"], "99.0.0")
+        out = self.run_hook()                        # next start tells the user
+        self.assertIn("99.0.0", out["systemMessage"])
+        self.assertIn("claude plugin update handoff-terminal@handoff-terminal", out["systemMessage"])
+        self.assertIsNone(self.run_hook())          # not again the same day
+
+    def test_same_version_is_quiet(self):
+        import common as c
+        self.remote_version(c.plugin_version())
+        self.run_hook()
+        self.assertIsNone(self.run_hook())
+
+    def test_clear_compact_and_opt_out_are_quiet(self):
+        self.remote_version("99.0.0")
+        self.run_hook()
+        self.assertIsNone(self.run_hook(source="clear"))
+        self.assertIsNone(self.run_hook(source="compact"))
+        self.assertIsNone(self.run_hook(env=dict(self.env, HANDOFF_NO_UPDATE_CHECK="1")))
+        self.assertIsNone(self.run_hook(env=dict(self.env, HANDOFF_CHILD="1")))
+
+    def test_offline_is_quiet_and_waits_a_day(self):
+        self.assertIsNone(self.run_hook())           # remote file missing = offline
+        data = self.cache()
+        self.assertNotIn("latest", data)
+        self.assertGreater(data["checked"], 0)
+
+
+class BugReportTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = os.path.join(self.tmp.name, "state")
+        os.makedirs(self.state)
+        home = os.path.expanduser("~")
+        with open(os.path.join(self.state, "handoff.log"), "w") as f:
+            f.write("2026-11-07 05:57:26 launch=ok id=20261107-055723-185b2a site=zonasul "
+                    "sid=772c7f9f out=pasta: %s/Projects comando: cd '%s/x'\n" % (home, home))
+            f.write("2026-11-07 05:58:00 held site=mybank sid=abc reason=not-named-by-user\n")
+            f.write("2026-11-07 05:59:55 done id=20261107-055723-185b2a status=ok\n")
+            f.write("2026-11-07 06:00:00 error sid=abc mail me at someone@example.com in /Users/x/y\n")
+        self.env = dict(os.environ, HANDOFF_STATE_DIR=self.state, HANDOFF_BUG_NO_GH="1",
+                        HANDOFF_BUG_NO_BROWSER="1")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def cmd(self, *args):
+        return subprocess.run([sys.executable, os.path.join(BIN, "handoff-bug")] + list(args),
+                              capture_output=True, text=True, env=self.env, timeout=30)
+
+    def test_draft_removes_personal_data(self):
+        r = self.cmd("draft", "the app never continued")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        path = os.path.join(self.state, "bug-report.md")
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+        with open(path) as f:
+            report = f.read()
+        self.assertIn("the app never continued", report)
+        self.assertIn("handoff-terminal: ", report)
+        self.assertIn("status=ok", report)
+        self.assertIn("reason=not-named-by-user", report)
+        for leak in ("zonasul", "mybank", "772c7f9f", "185b2a", "someone@example.com",
+                     os.path.expanduser("~"), "/Users/x", "comando"):
+            with self.subTest(leak=leak):
+                self.assertNotIn(leak, report)
+
+    def test_send_without_gh_gives_a_filled_link(self):
+        self.cmd("draft", "it broke")
+        r = self.cmd("send", os.path.join(self.state, "bug-report.md"), "--title", "Session never closed")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("https://github.com/lucas-saldanha-werneck/handoff-terminal/issues/new?", r.stdout)
+        self.assertIn("Session+never+closed", r.stdout)
+        self.assertIn("it+broke", r.stdout)
+
+    def test_send_without_report_fails(self):
+        self.assertNotEqual(self.cmd("send", os.path.join(self.state, "nope.md")).returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

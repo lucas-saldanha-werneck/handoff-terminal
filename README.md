@@ -103,6 +103,18 @@ screen and transcript. A command that prints it puts it there.
 
 Restart the desktop app session so it loads the hooks.
 
+### Updates
+
+Plugins from this kind of marketplace don't update by themselves. Turn auto-update on once:
+`/plugin` → **Marketplaces** → `handoff-terminal` → **Enable auto-update**. Or update by hand:
+
+```
+claude plugin update handoff-terminal@handoff-terminal
+```
+
+Once a day the plugin also checks GitHub in the background. When a newer version exists, the
+next session shows one line with the command. `HANDOFF_NO_UPDATE_CHECK=1` turns that off.
+
 ## Use
 
 Just ask the app ("log into my bank and download last month's statement", "buy what's in my cart",
@@ -118,6 +130,19 @@ To send a whole request to the terminal yourself, start the message with `termin
 terminal: sign in to example.com and download my invoices
 ```
 
+### Report a bug
+
+In Claude Code:
+
+```
+/handoff-terminal:bug the terminal session opened but the app never continued
+```
+
+It collects the versions and the last log lines (sites, ids and paths removed), shows you the
+report, and opens the GitHub issue only after you say yes. It uses `gh` when you're signed in.
+Otherwise it opens the browser with the report filled in. You can also
+[open an issue](https://github.com/lucas-saldanha-werneck/handoff-terminal/issues/new/choose) by hand.
+
 ## Settings
 
 Plugin options (`/plugin configure handoff-terminal@handoff-terminal`):
@@ -129,7 +154,8 @@ Plugin options (`/plugin configure handoff-terminal@handoff-terminal`):
 
 Environment variables (advanced): `HANDOFF_SCOPE`, `HANDOFF_NOTES` and `HANDOFF_LAUNCHER` do the
 same as the options. `HANDOFF_STATE_DIR` (default `~/.claude/state/handoff-terminal`),
-`HANDOFF_WAIT_SECONDS` (default `1800`), `HANDOFF_REMOTE_CONTROL=0` (start without Remote Control).
+`HANDOFF_WAIT_SECONDS` (default `1800`), `HANDOFF_REMOTE_CONTROL=0` (start without Remote Control),
+`HANDOFF_NO_UPDATE_CHECK=1` (no daily version check).
 
 ## How it works
 
@@ -138,6 +164,8 @@ same as the options. `HANDOFF_STATE_DIR` (default `~/.claude/state/handoff-termi
 | `hooks/nudge.py` | `UserPromptSubmit`, `PostToolUse(Failure)` on the 1Password tools | Tells the app how to hand off a blocked step instead of refusing it |
 | `hooks/stop.py` | `Stop` | Reads the marker line, checks the site and the action, writes the brief, starts the session, tells the app to wait |
 | `hooks/shortcut.py` | `UserPromptSubmit` | `terminal: <request>` sends the request to a new terminal session |
+| `hooks/update_check.py` | `SessionStart` | Once a day, checks GitHub for a newer version and shows one line |
+| `skills/bug/` + `bin/handoff-bug` | `/handoff-terminal:bug` | Builds a bug report, shows it, sends it to GitHub after your yes |
 | `lib/` | | Shared code: settings, state files, text checks |
 | `bin/handoff-launch` | | Default launcher |
 | `bin/handoff-wait` | | The app waits for the result (exit 0 ok, 1 error, 3 timeout) |
