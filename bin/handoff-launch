@@ -47,13 +47,13 @@ def trusted(folder):
         path = parent
 
 
-def claude_command(name, prompt, environ):
+def claude_command(name, prompt, environ, drop=()):
     """Shell command that starts claude clean: no inherited app variables, HANDOFF_CHILD=1."""
     claude = ["claude", "--no-chrome", "--name", name]
     if environ.get("HANDOFF_REMOTE_CONTROL", "1") != "0":
         claude += ["--remote-control", name]
     claude.append(prompt)
-    unset = ["-u %s" % shlex.quote(k) for k in sorted(environ) if INHERITED.match(k)]
+    unset = ["-u %s" % shlex.quote(k) for k in sorted(environ) if INHERITED.match(k) or k in drop]
     return "exec env %s HANDOFF_CHILD=1 %s" % (" ".join(unset), " ".join(shlex.quote(a) for a in claude))
 
 
@@ -96,9 +96,10 @@ def main():
               "at the trust question. Run `claude` in that folder once and accept, then try again."
               % folder, file=sys.stderr)
         return 1
-    inner = claude_command(name, prompt, os.environ)
     shell = os.environ.get("SHELL") or "/bin/sh"
     tmux = None if os.environ.get("HANDOFF_NO_TMUX") else shutil.which("tmux")
+    # Without tmux, a TMUX variable inherited from the caller would point at someone else's pane.
+    inner = claude_command(name, prompt, os.environ, drop=() if tmux else ("TMUX", "TMUX_PANE"))
     if not tmux:
         if not shutil.which("script"):
             print("handoff-launch: needs tmux or script (brew install tmux)", file=sys.stderr)

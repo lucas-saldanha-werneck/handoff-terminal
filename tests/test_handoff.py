@@ -356,6 +356,10 @@ class LaunchCommandTest(unittest.TestCase):
         self.assertIn("HANDOFF_CHILD=1", cmd)
         self.assertIn("--no-chrome", cmd)
         self.assertIn("'it'\"'\"'s a test; echo pwned'", cmd)  # one quoted argument, not shell code
+        windowless = self.launch.claude_command("n", "p", {"TMUX": "/t", "TMUX_PANE": "%1"},
+                                                drop=("TMUX", "TMUX_PANE"))
+        self.assertIn("-u TMUX ", windowless)
+        self.assertIn("-u TMUX_PANE", windowless)
 
     def test_session_name(self):
         self.assertTrue(self.launch.session_name("handoff zonasul 0222").startswith("handoff-zonasul-0222-"))
