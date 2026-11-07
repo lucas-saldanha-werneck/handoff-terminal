@@ -118,15 +118,15 @@ only checks that the command exists. It never runs it. Your notes say which one 
 | Manager | Read one field | Run a command with secrets, without printing them | Unlock | Tested |
 | --- | --- | --- | --- | --- |
 | 1Password `op` | `op read op://Vault/Item/password` | `op run --env-file=.env -- cmd` | `op signin` | ✅ |
-| Proton Pass `pass-cli` | `pass-cli item view "pass://Vault/Item/password"` | `pass-cli run --env-file .env -- cmd` | `pass-cli login` | docs |
-| Dashlane `dcli` | `dcli read dl://Item/password` | `dcli exec -- cmd` | `dcli sync` | docs |
+| Proton Pass `pass-cli` | `pass-cli item view "pass://Vault/Item/password"` | `pass-cli run --env-file .env -- cmd` | `pass-cli login` (opens a browser sign-in) | paid plan only ⚠️ |
+| Dashlane `dcli` | `dcli read dl://Item/password` | `dcli exec -- cmd` | `dcli sync` (asks email, a device code and the master password once) | ✅ |
 | gopass | `gopass show Item --password` | `gopass env Item cmd` (sets `ITEM=<password>`) | GPG agent | ✅ |
 | Bitwarden `bw` | `bw get password Item` | — | `bw unlock` (sets `BW_SESSION`) | ✅ |
 | Bitwarden `rbw` | `rbw get Item` (`--field=F` for others) | — | `rbw unlock` | ✅ |
-| LastPass `lpass` | `lpass show --password Item` (`--field=F`) | — | `lpass login <email>` | docs |
+| LastPass `lpass` | `lpass show --password Item` (`--field=F`) | — | `lpass login <email>` | ✅ |
 | KeePassXC | `keepassxc-cli show -a Password db.kdbx Item` | — | asks for the database password each time (reads it from stdin) | ✅ |
 | pass | `pass show Item` (first line) | — | GPG agent | ✅ |
-| Keeper `keeper` | `keeper find-password <UID>` | — | `keeper login` (then `this-device` for a persistent login) | docs |
+| Keeper `keeper` | `keeper find-password <UID or title>` | — | `keeper login` (then `this-device` for a persistent login) | ✅ |
 | macOS Keychain | `security find-generic-password -s Service -a Account -w` | — | your Mac login | ✅ |
 | Linux libsecret | `secret-tool lookup service Service` | — | your desktop login | ✅ |
 
@@ -146,10 +146,8 @@ The terminal session can only use a manager that is already unlocked, or one it 
 prompt. A manager that waits for a master password on the screen stops the hand-off. Unlock it
 before you start, or tell your notes how to unlock it (a biometric prompt, a session token file).
 
-✅ = run for real on 2026-11-07 against a test item (Bitwarden and rbw against a local Vaultwarden
-server). "docs" = checked against the official docs only, since testing needs an account. For
-Keeper, the one-line form comes from Commander's own usage text
-(`keeper [OPTIONS] [COMMAND] [COMMAND_OPTIONS]`).
+✅ = run for real on 2026-11-07 against a test item: Bitwarden and rbw against a local Vaultwarden
+server, LastPass, Keeper and Dashlane with trial accounts.
 
 What the tests showed:
 
@@ -158,6 +156,12 @@ What the tests showed:
 - The npm build of `bw` needs Node 20 or later (on Node 18 it stops with "Web Crypto API is
   unavailable"). Bitwarden's standalone `bw` download has no such need.
 - A self-hosted Bitwarden server must use HTTPS for `bw`.
+- Proton Pass: a free account signs in and is then refused with "Your account is not yet allowed
+  to use our CLI". The CLI needs a paid plan (Pass Plus or above).
+- Dashlane: `dcli` only reads. Add items in the Dashlane app or browser extension. `dcli exec`
+  runs its command through a shell as one string, so point it at a script instead of `sh -c '...'`.
+- LastPass: set `LPASS_DISABLE_PINENTRY=1` to give the master password on stdin. A long
+  `LPASS_HOME` path fails with "Path too large for agent control socket".
 
 ### Updates
 
