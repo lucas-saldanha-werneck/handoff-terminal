@@ -3,9 +3,10 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python: ["3.9", "3.13"]
+        python: ["3.10", "3.13"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -13,3 +14,9 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python tests/test_handoff.py -v
+  macos-system-python:
+    # The python3 that ships with macOS (Command Line Tools) is the one most users have.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: /usr/bin/python3 --version && /usr/bin/python3 tests/test_handoff.py -v
