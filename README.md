@@ -64,6 +64,11 @@ stops, and payments, purchases and new accounts stay with you.
 - macOS or Linux, `python3` (3.8+), `tmux` (`brew install tmux`), and the `claude` CLI on your login
   shell `PATH`. Without tmux, the session runs with no window at all (through `script`); follow it
   in your session list through Remote Control.
+- **Windows (new, not yet tried with the desktop app):** Python from
+  [python.org](https://www.python.org/downloads/windows/) (the Python install manager adds the
+  `python3` command the hooks call) and the `claude` CLI on `PATH`. The terminal session opens in a
+  new minimized window. Close it yourself when the step is done. Please report what you find with
+  `/handoff-terminal:bug`.
 - **One browser that both sessions can use.** The app keeps working in the browser where the step
   happened, so the terminal session has to work in *that* browser. For example, a Chrome profile
   started with `--remote-debugging-port` that also has the Claude in Chrome extension, plus a browser

@@ -1,6 +1,6 @@
 {
   "name": "handoff-terminal",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "When the Claude desktop app won't type your passwords, personal data, API keys or payment details, a terminal Claude Code session does that step and the app carries on.",
   "author": {
     "name": "Lucas Saldanha Werneck",
