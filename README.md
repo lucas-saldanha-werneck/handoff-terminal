@@ -126,7 +126,7 @@ only checks that the command exists. It never runs it. Your notes say which one 
 | LastPass `lpass` | `lpass show --password Item` (`--field=F`) | — | `lpass login <email>` |
 | KeePassXC | `keepassxc-cli show -a Password db.kdbx Item` | — | asks for the database password each time |
 | pass | `pass show Item` (first line) | — | GPG agent |
-| Keeper `keeper` | `find-password <UID>` inside `keeper shell` | — | login inside `keeper shell` |
+| Keeper `keeper` | `keeper find-password <UID>` | — | `keeper login` (then `this-device` for a persistent login) |
 | macOS Keychain | `security find-generic-password -s Service -a Account -w` | — | your Mac login |
 | Linux libsecret | `secret-tool lookup service Service` | — | your desktop login |
 
@@ -146,8 +146,8 @@ The terminal session can only use a manager that is already unlocked, or one it 
 prompt. A manager that waits for a master password on the screen stops the hand-off. Unlock it
 before you start, or tell your notes how to unlock it (a biometric prompt, a session token file).
 
-Commands checked against each manager's official docs on 2026-11-07. Keeper's one-line form
-outside `keeper shell` is not confirmed there. Use the shell.
+Commands checked against each manager's official docs on 2026-11-07. For Keeper, the one-line form
+comes from Commander's own usage text (`keeper [OPTIONS] [COMMAND] [COMMAND_OPTIONS]`).
 
 ### Updates
 
