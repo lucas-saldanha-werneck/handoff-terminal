@@ -310,6 +310,36 @@ class HookRun(unittest.TestCase):
 
 # ---------------------------------------------------------------- done / wait
 
+class LaunchTrustTest(unittest.TestCase):
+    def test_trust_rules(self):
+        import importlib.machinery
+        import importlib.util
+        loader = importlib.machinery.SourceFileLoader("handoff_launch", os.path.join(BIN, "handoff-launch"))
+        spec = importlib.util.spec_from_loader("handoff_launch", loader)
+        launch = importlib.util.module_from_spec(spec)
+        loader.exec_module(launch)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = os.path.realpath(tmp)
+            parent = os.path.join(tmp, "work")
+            plain = os.path.join(parent, "notes")
+            repo = os.path.join(parent, "repo")
+            for path in (plain, os.path.join(repo, ".git"), os.path.join(repo, "src")):
+                os.makedirs(path)
+            with open(os.path.join(tmp, ".claude.json"), "w") as f:
+                json.dump({"projects": {parent: {"hasTrustDialogAccepted": True}}}, f)
+            old = os.environ.get("CLAUDE_CONFIG_DIR")
+            os.environ["CLAUDE_CONFIG_DIR"] = tmp
+            try:
+                self.assertTrue(launch.trusted(plain))              # trusted parent counts
+                self.assertFalse(launch.trusted(repo))              # not across a git repo root
+                self.assertFalse(launch.trusted(os.path.join(repo, "src")))
+            finally:
+                if old is None:
+                    os.environ.pop("CLAUDE_CONFIG_DIR")
+                else:
+                    os.environ["CLAUDE_CONFIG_DIR"] = old
+
+
 class DoneWaitTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

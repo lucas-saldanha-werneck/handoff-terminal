@@ -37,8 +37,10 @@ def trusted(folder):
     while True:
         if (projects.get(path) or {}).get("hasTrustDialogAccepted"):
             return True
+        # Inside a git repository, trust given above the repository root does not count
+        # (seen on Claude Code 2.1.319: a trusted parent folder still asked for a new repo).
         parent = os.path.dirname(path)
-        if parent == path:
+        if parent == path or os.path.exists(os.path.join(path, ".git")):
             return False
         path = parent
 
