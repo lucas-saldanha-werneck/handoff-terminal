@@ -196,3 +196,23 @@ def digest(text):
 
 def result_path(hid):
     return os.path.join(STATE, "result-%s.json" % hid)
+
+
+# ---------------------------------------------------------------- version
+
+def plugin_version(root=None):
+    data = read_json(os.path.join(root or ROOT, ".claude-plugin", "plugin.json")) or {}
+    return str(data.get("version") or "0")
+
+
+def version_tuple(text):
+    """"0.10.2" -> (0, 10, 2). Anything that is not a number counts as 0."""
+    parts = []
+    for piece in str(text or "").strip().lstrip("v").split(".")[:4]:
+        m = re.match(r"\d+", piece)
+        parts.append(int(m.group()) if m else 0)
+    return tuple(parts) or (0,)
+
+
+def is_newer(latest, current):
+    return version_tuple(latest) > version_tuple(current)
