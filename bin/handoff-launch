@@ -35,9 +35,12 @@ def trusted(folder):
             projects = json.load(f).get("projects") or {}
     except (OSError, ValueError):
         return True  # cannot tell; let claude decide
+    def key(p):  # Windows keys may use / or \ and any letter case
+        return os.path.normcase(p.replace("/", os.sep)) if os.name == "nt" else p
+    accepted = {key(k) for k, v in projects.items() if isinstance(v, dict) and v.get("hasTrustDialogAccepted")}
     path = os.path.realpath(folder)
     while True:
-        if (projects.get(path) or {}).get("hasTrustDialogAccepted"):
+        if key(path) in accepted:
             return True
         # Inside a git repository, trust given above the repository root does not count
         # (seen on Claude Code 2.1.319: a trusted parent folder still asked for a new repo).
@@ -47,12 +50,38 @@ def trusted(folder):
         path = parent
 
 
+def claude_args(name, prompt, environ):
+    args = ["--no-chrome", "--name", name]
+    if environ.get("HANDOFF_REMOTE_CONTROL", "1") != "0":
+        args += ["--remote-control", name]
+    return args + [prompt]
+
+
+def clean_env(environ):
+    env = {k: v for k, v in environ.items() if not INHERITED.match(k)}
+    env["HANDOFF_CHILD"] = "1"
+    return env
+
+
+def launch_windows(folder, name, prompt):
+    """Windows: no tmux and no `script`, so the session opens in a new console window,
+    minimized and without taking the focus. Close it yourself when the step is over."""
+    exe = shutil.which("claude")
+    if not exe:
+        print("handoff-launch: `claude` is not on PATH", file=sys.stderr)
+        return 1
+    info = subprocess.STARTUPINFO()
+    info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    info.wShowWindow = 7  # SW_SHOWMINNOACTIVE
+    p = subprocess.Popen([exe] + claude_args(name, prompt, os.environ), cwd=folder, env=clean_env(os.environ),
+                         creationflags=subprocess.CREATE_NEW_CONSOLE, startupinfo=info)
+    print("started in a new minimized window (process %d)" % p.pid)
+    return 0
+
+
 def claude_command(name, prompt, environ, drop=()):
     """Shell command that starts claude clean: no inherited app variables, HANDOFF_CHILD=1."""
-    claude = ["claude", "--no-chrome", "--name", name]
-    if environ.get("HANDOFF_REMOTE_CONTROL", "1") != "0":
-        claude += ["--remote-control", name]
-    claude.append(prompt)
+    claude = ["claude"] + claude_args(name, prompt, environ)
     unset = ["-u %s" % shlex.quote(k) for k in sorted(environ) if INHERITED.match(k) or k in drop]
     return "exec env %s HANDOFF_CHILD=1 %s" % (" ".join(unset), " ".join(shlex.quote(a) for a in claude))
 
@@ -96,6 +125,8 @@ def main():
               "at the trust question. Run `claude` in that folder once and accept, then try again."
               % folder, file=sys.stderr)
         return 1
+    if os.name == "nt":
+        return launch_windows(folder, name, prompt)
     shell = os.environ.get("SHELL") or "/bin/sh"
     tmux = None if os.environ.get("HANDOFF_NO_TMUX") else shutil.which("tmux")
     # Without tmux, a TMUX variable inherited from the caller would point at someone else's pane.

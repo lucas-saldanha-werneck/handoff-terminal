@@ -44,6 +44,9 @@ def close_windowless_session():
 def close_own_session():
     if os.environ.get("HANDOFF_NO_CLOSE"):
         return
+    if os.name == "nt":
+        print("you can close this window now")
+        return
     pane = os.environ.get("TMUX_PANE")
     if not (os.environ.get("TMUX") and pane):
         close_windowless_session()

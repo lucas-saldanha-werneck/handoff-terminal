@@ -4,6 +4,7 @@ Nothing here starts a real session: hooks run with HANDOFF_DRY=1 and a temporary
 """
 import json
 import os
+import pathlib
 import subprocess
 import sys
 import tempfile
@@ -174,8 +175,9 @@ class HookRun(unittest.TestCase):
         briefs = self.files("brief-")
         self.assertEqual(len(briefs), 1)
         path = os.path.join(self.state, briefs[0])
-        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
-        self.assertEqual(os.stat(self.state).st_mode & 0o777, 0o700)
+        if os.name != "nt":  # Windows has no Unix file modes
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+            self.assertEqual(os.stat(self.state).st_mode & 0o777, 0o700)
         with open(path) as f:
             brief = f.read()
         self.assertIn("log into Zona Sul", brief)
@@ -406,7 +408,7 @@ class DoneWaitTest(unittest.TestCase):
 
     def test_note_is_one_short_line(self):
         self.cmd("handoff-done", "id-4", "ok", "line1\nline2 " + "x" * 600)
-        with open(os.path.join(self.tmp.name, "result-id-4.json")) as f:
+        with open(os.path.join(self.tmp.name, "result-id-4.json"), encoding="utf-8") as f:
             note = json.load(f)["note"]
         self.assertNotIn("\n", note)
         self.assertLessEqual(len(note), 300)
@@ -434,12 +436,38 @@ class VersionTest(unittest.TestCase):
         self.assertEqual(c.version_tuple("1.2.3-beta"), (1, 2, 3))
 
 
+class WindowsCommandTest(unittest.TestCase):
+    """The Windows command lines, checked on any OS by switching the flag."""
+    def setUp(self):
+        import common as c
+        self.c, self.old = c, c.WINDOWS
+        c.WINDOWS = True
+
+    def tearDown(self):
+        self.c.WINDOWS = self.old
+
+    def test_bin_cmd_runs_through_python(self):
+        cmd = self.c.bin_cmd("handoff-wait", "20261107-0222-abc")
+        self.assertTrue(cmd.startswith('"%s" ' % sys.executable.replace("\\", "/")))
+        self.assertIn("/bin/handoff-wait", cmd)
+        self.assertTrue(cmd.endswith('"20261107-0222-abc"'))
+        self.assertNotIn("\\", cmd)
+        self.assertIn("PowerShell", self.c.shell_hint())
+
+    def test_quote_arg(self):
+        self.assertEqual(self.c.quote_arg("C:\\Users\\A B\\x"), '"C:/Users/A B/x"')
+
+    def test_python_launcher_runs_through_python(self):
+        self.assertEqual(self.c.launcher_argv("a", "b", "c")[:2],
+                         [sys.executable, self.c.LAUNCHER])
+
+
 class UpdateCheckTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.remote = os.path.join(self.tmp.name, "remote.json")
         self.env = dict(os.environ, HANDOFF_STATE_DIR=os.path.join(self.tmp.name, "state"),
-                        HANDOFF_UPDATE_SYNC="1", HANDOFF_UPDATE_URL="file://" + self.remote)
+                        HANDOFF_UPDATE_SYNC="1", HANDOFF_UPDATE_URL=pathlib.Path(self.remote).as_uri())
         for k in ("HANDOFF_NO_UPDATE_CHECK", "HANDOFF_CHILD"):
             self.env.pop(k, None)
 
@@ -517,7 +545,8 @@ class BugReportTest(unittest.TestCase):
         r = self.cmd("draft", "the app never continued")
         self.assertEqual(r.returncode, 0, r.stderr)
         path = os.path.join(self.state, "bug-report.md")
-        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+        if os.name != "nt":  # Windows has no Unix file modes
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
         with open(path) as f:
             report = f.read()
         self.assertIn("the app never continued", report)

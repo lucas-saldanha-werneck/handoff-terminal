@@ -10,11 +10,20 @@ import json
 import os
 import re
 import secrets
+import shlex
+import sys
 import time
 import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN = os.path.join(ROOT, "bin")
+WINDOWS = os.name == "nt"
+if WINDOWS:
+    # The Windows console code page can't print "→", "—" or "…"; the print would fail and the
+    # hook would say nothing. UTF-8 output fixes it for every hook and command.
+    for _stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(Exception):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 def _setting(*names):
@@ -63,7 +72,8 @@ def read_stdin_json(stream):
 
 
 def emit(obj):
-    print(json.dumps(obj, ensure_ascii=False))
+    # ASCII-only JSON (non-ASCII as \u escapes) reads the same in any code page.
+    print(json.dumps(obj, ensure_ascii=True))
 
 
 def context(event, text):
@@ -175,15 +185,65 @@ def prune():
 
 @contextlib.contextmanager
 def locked(name):
-    """Serialize hook runs for one app session (fcntl, POSIX only)."""
-    import fcntl
+    """Serialize hook runs for one app session (fcntl on macOS/Linux, msvcrt on Windows)."""
     fd = os.open(state_path(safe_name(name) + ".lock"), os.O_RDWR | os.O_CREAT, 0o600)
+    if WINDOWS:
+        import msvcrt
+        while True:
+            try:
+                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)  # tries for 10 s, then raises
+                break
+            except OSError:
+                continue
+        try:
+            yield
+        finally:
+            os.lseek(fd, 0, os.SEEK_SET)
+            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+            os.close(fd)
+        return
+    import fcntl
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
         yield
     finally:
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
+
+
+# ---------------------------------------------------------------- commands
+
+def quote_arg(text):
+    """One shell argument. On Windows: double quotes and forward slashes, which Git Bash and
+    PowerShell both accept."""
+    if WINDOWS:
+        return '"%s"' % str(text).replace("\\", "/").replace('"', '\\"')
+    return shlex.quote(str(text))
+
+
+def bin_cmd(name, *args):
+    """Command line, for Claude to run, that calls one of the bin/ scripts.
+    Windows can't run a script by its shebang, so the Python that runs this hook runs it."""
+    parts = ([sys.executable] if WINDOWS else []) + [os.path.join(BIN, name)] + list(args)
+    return " ".join(quote_arg(p) for p in parts)
+
+
+def shell_hint():
+    """Extra words for Claude on Windows, where its shell can be PowerShell."""
+    return " (in PowerShell, put `& ` in front of it)" if WINDOWS else ""
+
+
+def launcher_argv(*args):
+    """argv that starts the launcher. A Python launcher on Windows runs through this Python."""
+    if WINDOWS:
+        try:
+            with open(LAUNCHER, "rb") as f:
+                head = f.read(64)
+        except OSError:
+            head = b""
+        if head.startswith(b"#!") and b"python" in head or LAUNCHER.endswith(".py"):
+            return [sys.executable, LAUNCHER] + list(args)
+    return [LAUNCHER] + list(args)
 
 
 def new_id():
