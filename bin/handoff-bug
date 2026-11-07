@@ -58,8 +58,21 @@ def log_tail():
     return "\n".join(redact(x) for x in lines) or "(log is empty)"
 
 
+def saved_options():
+    """Plugin options as saved by `claude plugin configure`. A skill's Bash commands don't get
+    the CLAUDE_PLUGIN_OPTION_* variables, so read them from settings.json."""
+    data = c.read_json(os.path.expanduser("~/.claude/settings.json")) or {}
+    entry = (data.get("pluginConfigs") or {}).get("handoff-terminal@handoff-terminal") or {}
+    return entry.get("options") or {}
+
+
 def draft(summary):
-    launcher = "default" if c.LAUNCHER == os.path.join(c.BIN, "handoff-launch") else "custom"
+    opts = saved_options()
+    custom = (os.environ.get("CLAUDE_PLUGIN_OPTION_LAUNCHER") or os.environ.get("HANDOFF_LAUNCHER")
+              or opts.get("launcher"))
+    launcher = "custom" if custom else "default"
+    scope = "sign-in" if (os.environ.get("CLAUDE_PLUGIN_OPTION_SCOPE") or os.environ.get("HANDOFF_SCOPE")
+                          or opts.get("scope") or "all") == "sign-in" else "all"
     tmux = run(["tmux", "-V"]) if shutil.which("tmux") else "not installed"
     report = "\n".join([
         "## What happened",
@@ -73,7 +86,7 @@ def draft(summary):
         "- OS: %s" % os_name(),
         "- Python: %s" % platform.python_version(),
         "- tmux: %s" % (tmux or "unknown"),
-        "- scope: %s, launcher: %s" % (c.SCOPE, launcher),
+        "- scope: %s, launcher: %s" % (scope, launcher),
         "",
         "## Last log lines (sites, ids and paths removed)",
         "",
