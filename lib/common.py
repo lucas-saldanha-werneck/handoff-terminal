@@ -18,6 +18,12 @@ import unicodedata
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN = os.path.join(ROOT, "bin")
 WINDOWS = os.name == "nt"
+if WINDOWS:
+    # The Windows console code page can't print "→", "—" or "…"; the print would fail and the
+    # hook would say nothing. UTF-8 output fixes it for every hook and command.
+    for _stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(Exception):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
 
 
 def _setting(*names):
@@ -66,7 +72,8 @@ def read_stdin_json(stream):
 
 
 def emit(obj):
-    print(json.dumps(obj, ensure_ascii=False))
+    # ASCII-only JSON (non-ASCII as \u escapes) reads the same in any code page.
+    print(json.dumps(obj, ensure_ascii=True))
 
 
 def context(event, text):
