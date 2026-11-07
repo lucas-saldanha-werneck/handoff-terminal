@@ -1,7 +1,7 @@
 {
   "name": "handoff-terminal",
   "version": "0.2.0",
-  "description": "When the Claude desktop app won't sign in to a site for you, a terminal Claude Code session does that one step and the app carries on.",
+  "description": "When the Claude desktop app won't type your passwords, personal data, API keys or payment details, a terminal Claude Code session does that step and the app carries on.",
   "author": {
     "name": "Lucas Saldanha Werneck",
     "url": "https://github.com/lucas-saldanha-werneck"
@@ -21,12 +21,12 @@
     "scope": {
       "type": "string",
       "title": "What the terminal session may do",
-      "description": "sign-in: only sign in. all: also pay, buy and create accounts, when you asked for it in your own words.",
+      "description": "all: sign in, fill in personal data, API keys and payment details, pay, buy and create accounts (paying, buying and creating accounts only when you asked in your own words). sign-in: only sign in.",
       "options": [
-        "sign-in",
-        "all"
+        "all",
+        "sign-in"
       ],
-      "default": "sign-in"
+      "default": "all"
     },
     "launcher": {
       "type": "string",

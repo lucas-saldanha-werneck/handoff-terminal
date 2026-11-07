@@ -13,9 +13,11 @@ SENSITIVE = re.compile(
     r"sign ?in|sign ?into|signin|sign me in|"
     r"username|user name|one[- ]time (code|password)|otp|2fa|two[- ]factor|verification code|"
     r"security code|pin|social security|ssn|tax id|taxpayer id|tin|itin|national id|government id|"
-    r"id number|passport|driver'?s licen[cs]e|"
+    r"id number|passport|driver'?s licen[cs]e|api key|access key|secret key|api token|"
+    r"personal (data|details|information|info)|date of birth|home address|"
     r"senha|cpf|cnpj|rg|cnh|credenciais?|credencial|logar|logue|fazer login|entr(e|ar|a) na (minha )?conta|"
-    r"codigo de (verificacao|acesso|seguranca)|documento de identidade|passaporte|"
+    r"codigo de (verificacao|acesso|seguranca)|documento de identidade|passaporte|chave de api|"
+    r"dados pessoais|meus dados|data de nascimento|"
     r"contrasena|dni|nie)\b")
 
 # Steps that go beyond signing in. Allowed only with scope "all", and only when the user's

@@ -30,9 +30,10 @@ STATE = _setting("HANDOFF_STATE_DIR") or os.path.expanduser("~/.claude/state/han
 NOTES = (_setting("CLAUDE_PLUGIN_OPTION_NOTES_FILE", "HANDOFF_NOTES")
          or os.path.expanduser("~/.config/handoff-terminal/notes.md"))
 LAUNCHER = _setting("CLAUDE_PLUGIN_OPTION_LAUNCHER", "HANDOFF_LAUNCHER") or os.path.join(BIN, "handoff-launch")
-# "sign-in" (default): the terminal session only signs in.
-# "all": it may also pay, buy and create accounts, when the user asked for that in their own words.
-SCOPE = "all" if _setting("CLAUDE_PLUGIN_OPTION_SCOPE", "HANDOFF_SCOPE").lower() in ("all", "tudo") else "sign-in"
+# "all" (default): sign in, fill in personal data, API keys and payment details, pay, buy and create
+#   accounts. Paying, buying and creating accounts also need the user's own words asking for them.
+# "sign-in": the terminal session only signs in.
+SCOPE = "sign-in" if _setting("CLAUDE_PLUGIN_OPTION_SCOPE", "HANDOFF_SCOPE").lower() == "sign-in" else "all"
 WAIT_MAX = int(os.environ.get("HANDOFF_WAIT_SECONDS") or 1800)
 RETENTION_DAYS = 7
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,63}$")

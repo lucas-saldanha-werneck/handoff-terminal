@@ -20,8 +20,9 @@ _STEPS = {
                 "to reach the user's own account",
                 " Do not use it for payments, purchases, money transfers or creating accounts; leave those "
                 "to the user."),
-    "all": ("signing in, typing a password, one-time code or ID number (SSN, CPF), entering payment "
-            "details, paying, placing an order or creating an account that the user asked for", ""),
+    "all": ("signing in; typing a password, one-time code, API key or ID number (SSN, CPF); filling in "
+            "the user's personal data or payment details; paying, placing an order or creating an account "
+            "that the user asked for", ""),
 }
 _what, _tail = _STEPS[c.SCOPE]
 NOTE = (

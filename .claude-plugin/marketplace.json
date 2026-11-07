@@ -1,12 +1,15 @@
 {
   "name": "handoff-terminal",
-  "description": "Hand the sign-in step the Claude desktop app refuses to a terminal Claude Code session.",
-  "owner": { "name": "Lucas Saldanha Werneck", "url": "https://github.com/lucas-saldanha-werneck" },
+  "description": "Hand the steps the Claude desktop app refuses (passwords, personal data, API keys, payments) to a terminal Claude Code session.",
+  "owner": {
+    "name": "Lucas Saldanha Werneck",
+    "url": "https://github.com/lucas-saldanha-werneck"
+  },
   "plugins": [
     {
       "name": "handoff-terminal",
       "source": "./",
-      "description": "When the Claude desktop app won't sign in to a site for you, a terminal Claude Code session does that one step and the app carries on."
+      "description": "When the Claude desktop app won't type your passwords, personal data, API keys or payment details, a terminal Claude Code session does that step and the app carries on."
     }
   ]
 }
