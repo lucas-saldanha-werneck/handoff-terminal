@@ -4,6 +4,7 @@ Nothing here starts a real session: hooks run with HANDOFF_DRY=1 and a temporary
 """
 import json
 import os
+import pathlib
 import subprocess
 import sys
 import tempfile
@@ -174,8 +175,9 @@ class HookRun(unittest.TestCase):
         briefs = self.files("brief-")
         self.assertEqual(len(briefs), 1)
         path = os.path.join(self.state, briefs[0])
-        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
-        self.assertEqual(os.stat(self.state).st_mode & 0o777, 0o700)
+        if os.name != "nt":  # Windows has no Unix file modes
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+            self.assertEqual(os.stat(self.state).st_mode & 0o777, 0o700)
         with open(path) as f:
             brief = f.read()
         self.assertIn("log into Zona Sul", brief)
@@ -406,7 +408,7 @@ class DoneWaitTest(unittest.TestCase):
 
     def test_note_is_one_short_line(self):
         self.cmd("handoff-done", "id-4", "ok", "line1\nline2 " + "x" * 600)
-        with open(os.path.join(self.tmp.name, "result-id-4.json")) as f:
+        with open(os.path.join(self.tmp.name, "result-id-4.json"), encoding="utf-8") as f:
             note = json.load(f)["note"]
         self.assertNotIn("\n", note)
         self.assertLessEqual(len(note), 300)
@@ -465,7 +467,7 @@ class UpdateCheckTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.remote = os.path.join(self.tmp.name, "remote.json")
         self.env = dict(os.environ, HANDOFF_STATE_DIR=os.path.join(self.tmp.name, "state"),
-                        HANDOFF_UPDATE_SYNC="1", HANDOFF_UPDATE_URL="file://" + self.remote)
+                        HANDOFF_UPDATE_SYNC="1", HANDOFF_UPDATE_URL=pathlib.Path(self.remote).as_uri())
         for k in ("HANDOFF_NO_UPDATE_CHECK", "HANDOFF_CHILD"):
             self.env.pop(k, None)
 
