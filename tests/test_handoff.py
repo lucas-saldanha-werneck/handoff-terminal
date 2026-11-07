@@ -436,6 +436,42 @@ class VersionTest(unittest.TestCase):
         self.assertEqual(c.version_tuple("1.2.3-beta"), (1, 2, 3))
 
 
+class PasswordManagerTest(unittest.TestCase):
+    def test_found_on_path_and_named_in_brief(self):
+        import common as c
+        ext = ".exe" if os.name == "nt" else ""
+        with tempfile.TemporaryDirectory() as tmp:
+            for cmd in ("bw", "keepassxc-cli", "pass-cli"):
+                path = os.path.join(tmp, cmd + ext)
+                with open(path, "w") as f:
+                    f.write("#!/bin/sh\n")
+                os.chmod(path, 0o755)
+            old = os.environ["PATH"]
+            os.environ["PATH"] = tmp
+            try:
+                names = [n for n, _ in c.password_clis()]
+            finally:
+                os.environ["PATH"] = old
+            self.assertEqual(names, ["Bitwarden", "Proton Pass", "KeePassXC"])
+            # The brief written by the Stop hook lists them for the terminal session.
+            state = os.path.join(tmp, "state")
+            transcript = os.path.join(tmp, "t.jsonl")
+            with open(transcript, "w") as f:
+                f.write(json.dumps({"type": "user", "message": {"content": "log into example.com"}}) + "\n")
+            env = dict(os.environ, HANDOFF_FORCE="1", HANDOFF_DRY="1", HANDOFF_STATE_DIR=state,
+                       HANDOFF_NOTES=os.path.join(tmp, "none.md"), PATH=tmp + os.pathsep + old)
+            payload = {"hook_event_name": "Stop", "session_id": "pm-1", "cwd": tmp, "transcript_path": transcript,
+                       "last_assistant_message": "Blocked.\nHANDOFF-TERMINAL: example.com | sign in"}
+            r = subprocess.run([sys.executable, os.path.join(HOOKS, "stop.py")], input=json.dumps(payload),
+                               capture_output=True, text=True, env=env, timeout=20)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            brief = [n for n in os.listdir(state) if n.startswith("brief-")][0]
+            with open(os.path.join(state, brief), encoding="utf-8") as f:
+                text = f.read()
+            self.assertIn("Bitwarden (`bw`)", text)
+            self.assertIn("KeePassXC (`keepassxc-cli`)", text)
+
+
 class WindowsCommandTest(unittest.TestCase):
     """The Windows command lines, checked on any OS by switching the flag."""
     def setUp(self):

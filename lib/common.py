@@ -258,6 +258,34 @@ def result_path(hid):
     return os.path.join(STATE, "result-%s.json" % hid)
 
 
+# ---------------------------------------------------------------- password managers
+
+# (name, command). Only the command's presence on PATH is checked; nothing is run.
+PASSWORD_CLIS = (
+    ("1Password", "op"),
+    ("Bitwarden", "bw"),
+    ("Bitwarden (rbw)", "rbw"),
+    ("Proton Pass", "pass-cli"),
+    ("Dashlane", "dcli"),
+    ("Keeper", "keeper"),
+    ("LastPass", "lpass"),
+    ("KeePassXC", "keepassxc-cli"),
+    ("pass", "pass"),
+    ("gopass", "gopass"),
+)
+SYSTEM_STORES = {"darwin": ("macOS Keychain", "security"), "linux": ("Secret Service (libsecret)", "secret-tool")}
+
+
+def password_clis():
+    """Password manager command-line tools found on PATH, as (name, command) pairs."""
+    import shutil
+    found = [(n, cmd) for n, cmd in PASSWORD_CLIS if shutil.which(cmd)]
+    system = SYSTEM_STORES.get(sys.platform)
+    if system and shutil.which(system[1]):
+        found.append(system)
+    return found
+
+
 # ---------------------------------------------------------------- version
 
 def plugin_version(root=None):

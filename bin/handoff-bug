@@ -36,6 +36,14 @@ def run(cmd):
 def os_name():
     if sys.platform == "darwin":
         return "macOS " + (platform.mac_ver()[0] or "?") + " " + platform.machine()
+    if sys.platform.startswith("linux"):
+        try:
+            with open("/etc/os-release", encoding="utf-8") as f:
+                info = dict(line.rstrip("\n").split("=", 1) for line in f if "=" in line)
+            return "%s (%s %s)" % (info.get("PRETTY_NAME", "Linux").strip('"'), platform.release(),
+                                   platform.machine())
+        except OSError:
+            pass
     return platform.system() + " " + platform.release() + " " + platform.machine()
 
 
@@ -87,6 +95,7 @@ def draft(summary):
         "- Python: %s" % platform.python_version(),
         "- tmux: %s" % (tmux or "unknown"),
         "- scope: %s, launcher: %s" % (scope, launcher),
+        "- password manager tools found: %s" % (", ".join(n for n, _ in c.password_clis()) or "none"),
         "",
         "## Last log lines (sites, ids and paths removed)",
         "",

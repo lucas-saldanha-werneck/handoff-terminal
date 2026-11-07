@@ -74,7 +74,9 @@ stops, and payments, purchases and new accounts stay with you.
   started with `--remote-debugging-port` that also has the Claude in Chrome extension, plus a browser
   tool in the terminal session that can attach to it (Chrome DevTools MCP, Playwright MCP,
   `agent-browser`, or a CDP script).
-- **A password manager CLI** the terminal session can use, such as 1Password `op` or Bitwarden `bw`.
+- **A password manager CLI** the terminal session can use. 1Password, Bitwarden, Proton Pass,
+  Dashlane, Keeper, LastPass, KeePassXC, pass, gopass and the system keychain all work. See
+  [Password managers](#password-managers).
 - The project folder must be trusted by Claude Code: open `claude` there once and accept.
 
 ## Install
@@ -107,6 +109,45 @@ A fill script that reads the secret on its own keeps the value out of the termin
 screen and transcript. A command that prints it puts it there.
 
 Restart the desktop app session so it loads the hooks.
+
+### Password managers
+
+The plugin looks for these tools on `PATH` and tells the terminal session which ones it found. It
+only checks that the command exists. It never runs it. Your notes say which one to use and how.
+
+| Manager | Read one field | Run a command with secrets, without printing them | Unlock |
+| --- | --- | --- | --- |
+| 1Password `op` | `op read op://Vault/Item/password` | `op run --env-file=.env -- cmd` | `op signin` |
+| Proton Pass `pass-cli` | `pass-cli item view "pass://Vault/Item/password"` | `pass-cli run --env-file .env -- cmd` | `pass-cli login` |
+| Dashlane `dcli` | `dcli read dl://Item/password` | `dcli exec -- cmd` | `dcli sync` |
+| gopass | `gopass show Item --password` | `gopass env Item cmd` | GPG agent |
+| Bitwarden `bw` | `bw get password Item` | — | `bw unlock` (sets `BW_SESSION`) |
+| Bitwarden `rbw` | `rbw get Item` (`--field=F` for others) | — | `rbw unlock` |
+| LastPass `lpass` | `lpass show --password Item` (`--field=F`) | — | `lpass login <email>` |
+| KeePassXC | `keepassxc-cli show -a Password db.kdbx Item` | — | asks for the database password each time |
+| pass | `pass show Item` (first line) | — | GPG agent |
+| Keeper `keeper` | `find-password <UID>` inside `keeper shell` | — | login inside `keeper shell` |
+| macOS Keychain | `security find-generic-password -s Service -a Account -w` | — | your Mac login |
+| Linux libsecret | `secret-tool lookup service Service` | — | your desktop login |
+
+The `.env` files above hold references, not values. For example, `DB_PASS=op://Vault/Item/password`
+or `DB_PASS=dl://Item/password`. Check the exact reference format in your manager's docs.
+
+For managers with no "run" command, the fill script reads the value into a variable itself, so the
+terminal session never sees it:
+
+```sh
+# ~/bin/fill-password, called as: fill-password '<css selector>'
+export PW="$(bw get password Github)"   # or rbw get / lpass show --password / pass show ... | head -1
+~/bin/fill-field "$1" PW                # pass the variable's name, not the value
+```
+
+The terminal session can only use a manager that is already unlocked, or one it can unlock with no
+prompt. A manager that waits for a master password on the screen stops the hand-off. Unlock it
+before you start, or tell your notes how to unlock it (a biometric prompt, a session token file).
+
+Commands checked against each manager's official docs on 2026-11-07. Keeper's one-line form
+outside `keeper shell` is not confirmed there. Use the shell.
 
 ### Updates
 
