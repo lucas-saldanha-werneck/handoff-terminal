@@ -44,7 +44,7 @@ def main():
     if not os.path.isdir(cwd):
         cwd = os.path.expanduser("~")
     name = "terminal " + time.strftime("%H%M")
-    cmd = [c.LAUNCHER, cwd, name, request]
+    cmd = c.launcher_argv(cwd, name, request)
     if c.dry_run():
         ok, out = True, "DRY " + " ".join(shlex.quote(x) for x in cmd)
     else:

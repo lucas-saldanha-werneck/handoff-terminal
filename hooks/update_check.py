@@ -69,9 +69,11 @@ def main():
         if os.environ.get("HANDOFF_UPDATE_SYNC"):  # tests
             fetch()
         else:
+            extra = ({"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW}
+                     if c.WINDOWS else {"start_new_session": True})
             subprocess.Popen([sys.executable, os.path.abspath(__file__), "--fetch"],
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                             stderr=subprocess.DEVNULL, start_new_session=True)
+                             stderr=subprocess.DEVNULL, **extra)
 
 
 if __name__ == "__main__":

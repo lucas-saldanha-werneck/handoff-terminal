@@ -434,6 +434,32 @@ class VersionTest(unittest.TestCase):
         self.assertEqual(c.version_tuple("1.2.3-beta"), (1, 2, 3))
 
 
+class WindowsCommandTest(unittest.TestCase):
+    """The Windows command lines, checked on any OS by switching the flag."""
+    def setUp(self):
+        import common as c
+        self.c, self.old = c, c.WINDOWS
+        c.WINDOWS = True
+
+    def tearDown(self):
+        self.c.WINDOWS = self.old
+
+    def test_bin_cmd_runs_through_python(self):
+        cmd = self.c.bin_cmd("handoff-wait", "20261107-0222-abc")
+        self.assertTrue(cmd.startswith('"%s" ' % sys.executable.replace("\\", "/")))
+        self.assertIn("/bin/handoff-wait", cmd)
+        self.assertTrue(cmd.endswith('"20261107-0222-abc"'))
+        self.assertNotIn("\\", cmd)
+        self.assertIn("PowerShell", self.c.shell_hint())
+
+    def test_quote_arg(self):
+        self.assertEqual(self.c.quote_arg("C:\\Users\\A B\\x"), '"C:/Users/A B/x"')
+
+    def test_python_launcher_runs_through_python(self):
+        self.assertEqual(self.c.launcher_argv("a", "b", "c")[:2],
+                         [sys.executable, self.c.LAUNCHER])
+
+
 class UpdateCheckTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -517,7 +543,8 @@ class BugReportTest(unittest.TestCase):
         r = self.cmd("draft", "the app never continued")
         self.assertEqual(r.returncode, 0, r.stderr)
         path = os.path.join(self.state, "bug-report.md")
-        self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
+        if os.name != "nt":  # Windows has no Unix file modes
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
         with open(path) as f:
             report = f.read()
         self.assertIn("the app never continued", report)
