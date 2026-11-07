@@ -24,7 +24,7 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 import common as c  # noqa: E402
 import detect as d  # noqa: E402
 
@@ -82,6 +82,10 @@ def pending_for(sid):
     if os.path.exists(c.result_path(p["id"])) or time.time() - p.get("t", 0) > c.WAIT_MAX + 120:
         return None
     return p
+
+
+def save_pending(sid, data):
+    c.write_private(c.state_path("pending-%s.json" % sid), json.dumps(data))
 
 
 def notes_text():
@@ -185,7 +189,7 @@ def handle_marker(data, sid, site, step):
     if pend:
         if not pend.get("reminded"):
             pend["reminded"] = True
-            c.write_private(c.state_path("pending-%s.json" % sid), json.dumps(pend))
+            save_pending(sid, pend)
             c.context("Stop", "handoff-terminal: hand-off %s (%s) is still running. Do not start "
                               "another one. Wait for it: run `%s %s` with the Bash tool and "
                               "run_in_background=true, if it is not running already."
@@ -241,8 +245,7 @@ def handle_marker(data, sid, site, step):
                           "one short sentence and suggest sending `terminal: <request>`." % out)
         return
     if not c.dry_run():
-        c.write_private(c.state_path("pending-%s.json" % sid), json.dumps(
-            {"id": hid, "site": key, "t": time.time(), "name": name}))
+        save_pending(sid, {"id": hid, "site": key, "t": time.time(), "name": name})
     wait = "%s %s" % (shlex.quote(os.path.join(c.BIN, "handoff-wait")), hid)
     maybe = (" The launcher was slow to answer; the session may still be starting."
              if status == "timeout" else "")

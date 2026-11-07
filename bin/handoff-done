@@ -12,11 +12,11 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "hooks"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "lib"))
 import common as c  # noqa: E402
 
-# tmux sessions started by handoff-launch (or a launcher that keeps "handoff-" in the name).
-OWN_SESSION = re.compile(r"(^|-)(handoff|terminal)-")
+# Hand-off sessions always have "handoff" in their name (the hook names them "handoff <site> HHMM").
+OWN_SESSION = re.compile(r"(^|-)handoff-")
 
 
 def close_own_tmux_session():

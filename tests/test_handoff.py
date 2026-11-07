@@ -12,7 +12,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOOKS = os.path.join(ROOT, "hooks")
 BIN = os.path.join(ROOT, "bin")
-sys.path.insert(0, HOOKS)
+sys.path.insert(0, os.path.join(ROOT, "lib"))
 
 import detect as d  # noqa: E402
 

@@ -60,7 +60,10 @@ def main():
     if not os.path.isdir(folder):
         print("handoff-launch: no such folder: %s" % folder, file=sys.stderr)
         return 1
-    session = "handoff-%s-%s" % (re.sub(r"[^A-Za-z0-9_-]+", "-", name).strip("-")[:40], secrets.token_hex(2))
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", name).strip("-")[:40]
+    if not slug.startswith("handoff-"):
+        slug = "handoff-" + slug
+    session = "%s-%s" % (slug, secrets.token_hex(2))
     claude = ["claude", "--no-chrome", "--name", name]
     if os.environ.get("HANDOFF_REMOTE_CONTROL", "1") != "0":
         claude += ["--remote-control", name]

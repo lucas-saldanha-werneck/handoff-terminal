@@ -11,7 +11,7 @@ Runs only in Claude desktop app sessions. Prints nothing otherwise.
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 import common as c  # noqa: E402
 import detect as d  # noqa: E402
 

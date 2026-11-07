@@ -15,7 +15,7 @@ import subprocess
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 import common as c  # noqa: E402
 
 # "/terminal-setup" and other commands that only start with "/terminal" do not match.
