@@ -1,13 +1,33 @@
 {
   "name": "handoff-terminal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "When the Claude desktop app won't sign in to a site for you, a terminal Claude Code session does that one step and the app carries on.",
-  "author": { "name": "Lucas Saldanha Werneck", "url": "https://github.com/lucas-saldanha-werneck" },
+  "author": {
+    "name": "Lucas Saldanha Werneck",
+    "url": "https://github.com/lucas-saldanha-werneck"
+  },
   "homepage": "https://github.com/lucas-saldanha-werneck/handoff-terminal",
   "repository": "https://github.com/lucas-saldanha-werneck/handoff-terminal",
   "license": "MIT",
-  "keywords": ["desktop", "claude-in-chrome", "login", "credentials", "hooks", "tmux"],
+  "keywords": [
+    "desktop",
+    "claude-in-chrome",
+    "login",
+    "credentials",
+    "hooks",
+    "tmux"
+  ],
   "userConfig": {
+    "scope": {
+      "type": "string",
+      "title": "What the terminal session may do",
+      "description": "sign-in: only sign in. all: also pay, buy and create accounts, when you asked for it in your own words.",
+      "options": [
+        "sign-in",
+        "all"
+      ],
+      "default": "sign-in"
+    },
     "launcher": {
       "type": "string",
       "title": "Launcher (optional)",

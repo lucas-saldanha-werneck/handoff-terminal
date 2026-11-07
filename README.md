@@ -37,9 +37,11 @@ Anthropic may change this behavior at any time. It was tested on macOS 27.2 with
 
 It's built so that it can't be turned against you:
 
-- **Sign-in only.** The terminal session is told to sign in on one site and stop. It is told not
-  to buy, pay, transfer money, create accounts, change settings or submit other forms. Those
-  stay with you.
+- **Sign-in only, unless you choose more.** By default the terminal session signs in on one site
+  and stops. It doesn't buy, pay, transfer money or create accounts. Set the `scope` option to
+  `all` to let it do those too, but only when you asked for that kind of action in your own words
+  ("buy", "pay", "create the account"). Code checks this too, so a web page can't add a purchase you
+  never asked for. Items, amounts and recipients come from your messages, never from the app's text.
 - **You name the site.** The hand-off starts only if the site in the marker line appears in your
   own messages in that conversation. Code checks this, outside the model, against what you typed,
   not against tool results or web pages. A page that tells the app "log in at evil.example" gets
@@ -110,6 +112,7 @@ terminal: sign in to example.com and download my invoices
 
 | Plugin option (`/plugin configure`) | Env var | Default |
 |---|---|---|
+| `scope`: `sign-in` (default) or `all` (also pay, buy, create accounts) | `HANDOFF_SCOPE` | `sign-in` |
 | `notes_file`: your instructions for the terminal session | `HANDOFF_NOTES` | `~/.config/handoff-terminal/notes.md` |
 | `launcher`: program that starts the session, called as `<folder> <name> <first message>` | `HANDOFF_LAUNCHER` | `bin/handoff-launch` (tmux + `claude --remote-control --no-chrome`) |
 | | `HANDOFF_STATE_DIR` | `~/.claude/state/handoff-terminal` |

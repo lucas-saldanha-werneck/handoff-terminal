@@ -18,6 +18,19 @@ SENSITIVE = re.compile(
     r"codigo de (verificacao|acesso|seguranca)|documento de identidade|passaporte|"
     r"contrasena|dni|nie)\b")
 
+# Steps that go beyond signing in. Allowed only with scope "all", and only when the user's
+# own messages ask for the same kind of action.
+ACTIONS = {
+    "money": re.compile(
+        r"\b(buy|purchase|order|checkout|check out|pay|payment|subscribe|transfer|send money|wire|"
+        r"credit card|debit card|card number|cvv|cvc|bank account|routing number|iban|"
+        r"compr(a|ar|e|ei)|pag(ar|ue|amento)|pedido|finaliz(ar|e) (a |o )?(compra|pedido)|assin(ar|e|atura)|"
+        r"transfer(ir|encia|e)|pix|boleto|cartao|conta bancaria)\b"),
+    "account": re.compile(
+        r"\b(create (an |the |a new |my )?account|sign ?up|register|registration|open (an |a )?account|"
+        r"cri(ar|e) (uma |a |minha )?conta|cadastr\w*|abr(ir|a) (uma )?conta|inscrev\w*)\b"),
+}
+
 # Wording of a refusal to do the step.
 _REFUSE_EN = (
     r"\b(i (can't|cant|cannot|can not|won't|will not|don't|do not|shouldn't|should not|must not)|"
@@ -57,6 +70,17 @@ def sentences(text):
 
 def mentions_sensitive(text):
     return bool(SENSITIVE.search(norm(text)))
+
+
+def action_kinds(text):
+    """Which beyond-sign-in actions a text asks for: a subset of {"money", "account"}."""
+    t = norm(text)
+    return {kind for kind, rx in ACTIONS.items() if rx.search(t)}
+
+
+def actions_authorized(step, user_texts):
+    """True when every kind of action in the step also appears in the user's own messages."""
+    return action_kinds(step) <= action_kinds(" ".join(user_texts or []))
 
 
 def is_refusal(text):

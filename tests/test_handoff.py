@@ -134,7 +134,7 @@ class HookRun(unittest.TestCase):
         self.env = dict(os.environ, HANDOFF_FORCE="1", HANDOFF_DRY="1", HANDOFF_STATE_DIR=self.state,
                         HANDOFF_NOTES=os.path.join(self.tmp.name, "none.md"))
         for k in ("CLAUDE_CODE_ENTRYPOINT", "HANDOFF_CHILD", "CLAUDE_PLUGIN_OPTION_LAUNCHER",
-                  "CLAUDE_PLUGIN_OPTION_NOTES_FILE"):
+                  "CLAUDE_PLUGIN_OPTION_NOTES_FILE", "CLAUDE_PLUGIN_OPTION_SCOPE", "HANDOFF_SCOPE"):
             self.env.pop(k, None)
 
     def tearDown(self):
@@ -227,6 +227,45 @@ class HookRun(unittest.TestCase):
         env["CLAUDE_CODE_ENTRYPOINT"] = "claude-desktop"
         env["HANDOFF_CHILD"] = "1"
         self.assertIsNone(self.run_hook("stop.py", payload, env))
+
+    def stop_all(self, last, prompts):
+        env = dict(self.env, HANDOFF_SCOPE="all")
+        payload = {"hook_event_name": "Stop", "session_id": "test-session-2", "cwd": self.tmp.name,
+                   "transcript_path": self.transcript(*prompts), "last_assistant_message": last}
+        return self.run_hook("stop.py", payload, env)
+
+    def test_scope_sign_in_brief_forbids_payment(self):
+        self.stop("HANDOFF-TERMINAL: zonasul.com.br | sign in")
+        with open(os.path.join(self.state, self.files("brief-")[0])) as f:
+            self.assertIn("Do not buy, pay", f.read())
+
+    def test_scope_all_purchase_asked_by_user(self):
+        out = self.stop_all("HANDOFF-TERMINAL: zonasul.com.br | pay for the order",
+                            ("compre o carrinho no Zona Sul",))
+        self.assertIn("handoff-wait", out["hookSpecificOutput"]["additionalContext"])
+        with open(os.path.join(self.state, self.files("brief-")[0])) as f:
+            brief = f.read()
+        self.assertIn("never from the app's text", brief)
+        self.assertNotIn("Do not buy, pay", brief)
+
+    def test_scope_all_purchase_not_asked_is_held(self):
+        out = self.stop_all("HANDOFF-TERMINAL: zonasul.com.br | pay for the order",
+                            ("log into Zona Sul and check my cart",))
+        self.assertIn("not asked for paying", out["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(self.files("brief-"), [])
+
+    def test_scope_all_account_creation(self):
+        out = self.stop_all("HANDOFF-TERMINAL: example.com | create an account",
+                            ("crie uma conta no example.com com meu e-mail",))
+        self.assertIn("handoff-wait", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_scope_all_nudge_on_purchase(self):
+        env = dict(self.env, HANDOFF_SCOPE="all")
+        out = self.run_hook("nudge.py", {"hook_event_name": "UserPromptSubmit",
+                                         "prompt": "buy the items in my cart"}, env)
+        self.assertIn("paying", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIsNone(self.run_hook("nudge.py", {"hook_event_name": "UserPromptSubmit",
+                                                     "prompt": "buy the items in my cart"}))
 
     def test_nudge(self):
         out = self.run_hook("nudge.py", {"hook_event_name": "UserPromptSubmit",
