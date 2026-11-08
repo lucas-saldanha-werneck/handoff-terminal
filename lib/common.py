@@ -147,6 +147,40 @@ def write_private(path, text):
         raise
 
 
+def write_private_once(path, text):
+    """Like write_private, but never replaces a file that is already there.
+
+    Returns False when the file already exists. The final step is atomic: os.link (and
+    os.rename on Windows) fail if the target exists, so two writers cannot both win.
+    """
+    tmp = "%s.%d.%s.tmp" % (path, os.getpid(), secrets.token_hex(4))
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(tmp, flags, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            return False
+        except (OSError, NotImplementedError, AttributeError):
+            # No hard links here (some file systems): rename refuses an existing target on
+            # Windows; elsewhere check first (a tiny race, but no worse than before).
+            if WINDOWS:
+                try:
+                    os.rename(tmp, path)
+                except FileExistsError:
+                    return False
+                return True
+            if os.path.lexists(path):
+                return False
+            os.replace(tmp, path)
+        return True
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+
+
 def read_json(path):
     try:
         with open(path, encoding="utf-8") as f:

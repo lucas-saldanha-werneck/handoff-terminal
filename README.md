@@ -230,7 +230,7 @@ same as the options. `HANDOFF_STATE_DIR` (default `~/.claude/state/handoff-termi
 | `lib/` | | Shared code: settings, state files, text checks |
 | `bin/handoff-launch` | | Default launcher |
 | `bin/handoff-wait` | | The app waits for the result (exit 0 ok, 1 error, 3 timeout) |
-| `bin/handoff-done` | | The terminal records the result and closes its tmux session |
+| `bin/handoff-done` | | The terminal records the result (the first one wins; a second call is refused) and closes its tmux session |
 
 Logs are in `~/.claude/state/handoff-terminal/handoff.log`.
 

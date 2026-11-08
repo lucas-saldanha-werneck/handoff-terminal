@@ -397,6 +397,28 @@ class DoneWaitTest(unittest.TestCase):
         self.cmd("handoff-done", "id-2", "error", "wrong password")
         self.assertEqual(self.cmd("handoff-wait", "id-2", "5").returncode, 1)
 
+    def test_first_result_wins(self):
+        self.assertEqual(self.cmd("handoff-done", "id-6", "ok", "signed in").returncode, 0)
+        second = self.cmd("handoff-done", "id-6", "error", "oops")
+        self.assertEqual(second.returncode, 1)
+        self.assertIn("already", second.stdout)
+        r = self.cmd("handoff-wait", "id-6", "5")
+        self.assertEqual(r.returncode, 0)
+        self.assertIn("signed in", r.stdout)
+        leftovers = [n for n in os.listdir(self.tmp.name) if n.endswith(".tmp")]
+        self.assertEqual(leftovers, [])
+
+    def test_write_once_without_hard_links(self):
+        import common as c
+        from unittest import mock
+        path = os.path.join(self.tmp.name, "result-id-7.json")
+        with mock.patch.object(c.os, "link", side_effect=OSError("no links")):
+            self.assertTrue(c.write_private_once(path, "first"))
+            self.assertFalse(c.write_private_once(path, "second"))
+        with open(path, encoding="utf-8") as f:
+            self.assertEqual(f.read(), "first")
+        self.assertEqual([n for n in os.listdir(self.tmp.name) if n.endswith(".tmp")], [])
+
     def test_timeout(self):
         self.assertEqual(self.cmd("handoff-wait", "id-3", "1").returncode, 3)
 

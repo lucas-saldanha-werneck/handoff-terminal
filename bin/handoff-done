@@ -71,9 +71,14 @@ def main():
     hid, status = args[0], args[1]
     note = c.one_line(" ".join(args[2:]), 300)
     c.ensure_state()
-    c.write_private(c.result_path(hid), json.dumps(
-        {"id": hid, "status": status, "note": note, "at": time.strftime("%Y-%m-%d %H:%M:%S")},
-        ensure_ascii=False))
+    path = c.result_path(hid)
+    if not c.write_private_once(path, json.dumps(
+            {"id": hid, "status": status, "note": note, "at": time.strftime("%Y-%m-%d %H:%M:%S")},
+            ensure_ascii=False)):
+        first = (c.read_json(path) or {}).get("status", "?")
+        c.log("done id=%s status=%s refused (already %s)" % (hid, status, first))
+        print("hand-off %s already has a result (%s); this one was not recorded" % (hid, first))
+        return 1
     c.log("done id=%s status=%s" % (hid, status))
     print("recorded %s for hand-off %s" % (status, hid))
     close_own_session()
