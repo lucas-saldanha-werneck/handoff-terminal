@@ -335,6 +335,20 @@ def plugin_version(root=None):
     return str(data.get("version") or "0")
 
 
+def marketplace(root=None):
+    """Marketplace this copy was installed from. Installed plugins live in
+    ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>; anything else (a clone, --plugin-dir)
+    counts as the catalog, lucas-plugins."""
+    parts = os.path.normpath(root or ROOT).split(os.sep)
+    if len(parts) >= 4 and parts[-4] == "cache":
+        return parts[-3]
+    return "lucas-plugins"
+
+
+def plugin_id(root=None):
+    return "handoff-terminal@" + marketplace(root)
+
+
 def version_tuple(text):
     """"0.10.2" -> (0, 10, 2). Anything that is not a number counts as 0."""
     parts = []

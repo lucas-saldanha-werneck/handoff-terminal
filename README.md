@@ -85,14 +85,8 @@ stops, and payments, purchases and new accounts stay with you.
 In Claude Code:
 
 ```
-/plugin install handoff-terminal --marketplace lucas-saldanha-werneck/handoff-terminal
-```
-
-On versions before 2.1.275:
-
-```
-/plugin marketplace add lucas-saldanha-werneck/handoff-terminal
-/plugin install handoff-terminal@handoff-terminal
+/plugin marketplace add lucas-saldanha-werneck/claude-plugins
+/plugin install handoff-terminal@lucas-plugins
 ```
 
 Then write your setup notes. The terminal session reads them on every hand-off:
@@ -167,10 +161,10 @@ What the tests showed:
 ### Updates
 
 Plugins from this kind of marketplace don't update by themselves. Turn auto-update on once:
-`/plugin` → **Marketplaces** → `handoff-terminal` → **Enable auto-update**. Or update by hand:
+`/plugin` → **Marketplaces** → `lucas-plugins` → **Enable auto-update**. Or update by hand:
 
 ```
-claude plugin update handoff-terminal@handoff-terminal
+claude plugin update handoff-terminal@lucas-plugins
 ```
 
 Once a day the plugin also checks GitHub in the background. When a newer version exists, the
@@ -206,7 +200,7 @@ Otherwise it opens the browser with the report filled in. You can also
 
 ## Settings
 
-Plugin options (`/plugin configure handoff-terminal@handoff-terminal`):
+Plugin options (`/plugin configure handoff-terminal@lucas-plugins`):
 
 - `scope`: `all` (default) or `sign-in`.
 - `notes_file`: your instructions for the terminal session. Default `~/.config/handoff-terminal/notes.md`.
@@ -234,7 +228,7 @@ same as the options. `HANDOFF_STATE_DIR` (default `~/.claude/state/handoff-termi
 
 Logs are in `~/.claude/state/handoff-terminal/handoff.log`.
 
-## Known limits
+## Limits
 
 - The app has to write the marker line. If it refuses without one, the Stop hook reminds it
   once. It never starts a session from a refusal alone.
@@ -245,7 +239,7 @@ Logs are in `~/.claude/state/handoff-terminal/handoff.log`.
   apply. The terminal session can still decline a step on its own judgment. If a future Claude
   Code version brings the same rules to the terminal, it stops working.
 
-## Test
+## Tests
 
 ```
 python3 tests/test_handoff.py -v

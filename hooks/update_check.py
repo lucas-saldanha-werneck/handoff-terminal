@@ -46,8 +46,8 @@ def fetch():
 
 def message(latest, current):
     return ("handoff-terminal %s is out (you have %s). Update: claude plugin update "
-            "handoff-terminal@handoff-terminal — or turn on auto-update in /plugin → "
-            "Marketplaces → handoff-terminal." % (latest, current))
+            "%s — or turn on auto-update in /plugin → Marketplaces → %s."
+            % (latest, current, c.plugin_id(), c.marketplace()))
 
 
 def main():

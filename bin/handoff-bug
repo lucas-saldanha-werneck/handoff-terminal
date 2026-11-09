@@ -70,7 +70,9 @@ def saved_options():
     """Plugin options as saved by `claude plugin configure`. A skill's Bash commands don't get
     the CLAUDE_PLUGIN_OPTION_* variables, so read them from settings.json."""
     data = c.read_json(os.path.expanduser("~/.claude/settings.json")) or {}
-    entry = (data.get("pluginConfigs") or {}).get("handoff-terminal@handoff-terminal") or {}
+    configs = data.get("pluginConfigs") or {}
+    entry = configs.get(c.plugin_id()) or configs.get("handoff-terminal@lucas-plugins") \
+        or configs.get("handoff-terminal@handoff-terminal") or {}
     return entry.get("options") or {}
 
 
