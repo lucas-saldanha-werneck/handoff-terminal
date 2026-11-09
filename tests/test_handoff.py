@@ -457,6 +457,16 @@ class VersionTest(unittest.TestCase):
         self.assertFalse(c.is_newer("", "0.4.1"))
         self.assertEqual(c.version_tuple("1.2.3-beta"), (1, 2, 3))
 
+    def test_plugin_id_follows_the_install(self):
+        import common as c
+        cache = os.path.join(os.sep, "home", "u", ".claude", "plugins", "cache")
+        self.assertEqual(c.plugin_id(os.path.join(cache, "lucas-plugins", "handoff-terminal", "0.7.3")),
+                         "handoff-terminal@lucas-plugins")
+        self.assertEqual(c.plugin_id(os.path.join(cache, "handoff-terminal", "handoff-terminal", "0.7.2")),
+                         "handoff-terminal@handoff-terminal")
+        self.assertEqual(c.plugin_id(os.path.join(os.sep, "src", "handoff-terminal")),
+                         "handoff-terminal@lucas-plugins")
+
 
 class PasswordManagerTest(unittest.TestCase):
     def test_found_on_path_and_named_in_brief(self):
@@ -562,7 +572,7 @@ class UpdateCheckTest(unittest.TestCase):
         self.assertEqual(self.cache()["latest"], "99.0.0")
         out = self.run_hook()                        # next start tells the user
         self.assertIn("99.0.0", out["systemMessage"])
-        self.assertIn("claude plugin update handoff-terminal@handoff-terminal", out["systemMessage"])
+        self.assertIn("claude plugin update handoff-terminal@", out["systemMessage"])
         self.assertIsNone(self.run_hook())          # not again the same day
 
     def test_same_version_is_quiet(self):

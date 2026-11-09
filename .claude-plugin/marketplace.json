@@ -9,7 +9,7 @@
     {
       "name": "handoff-terminal",
       "source": "./",
-      "description": "When the Claude desktop app won't type your passwords, personal data, API keys or payment details, a terminal Claude Code session does that step and the app carries on."
+      "description": "A terminal session does the sign-in steps the desktop app refuses."
     }
   ]
 }
