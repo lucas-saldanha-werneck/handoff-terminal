@@ -85,7 +85,7 @@ stops, and payments, purchases and new accounts stay with you.
 In Claude Code:
 
 ```
-/plugin marketplace add lucas-saldanha-werneck/claude-plugins
+/plugin marketplace add lucas-saldanha-werneck/lucas-tools
 /plugin install handoff-terminal@lucas-tools
 ```
 
