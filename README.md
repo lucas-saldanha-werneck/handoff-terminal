@@ -86,7 +86,7 @@ In Claude Code:
 
 ```
 /plugin marketplace add lucas-saldanha-werneck/claude-plugins
-/plugin install handoff-terminal@lucas-plugins
+/plugin install handoff-terminal@lucas-tools
 ```
 
 Then write your setup notes. The terminal session reads them on every hand-off:
@@ -161,10 +161,10 @@ What the tests showed:
 ### Updates
 
 Plugins from this kind of marketplace don't update by themselves. Turn auto-update on once:
-`/plugin` → **Marketplaces** → `lucas-plugins` → **Enable auto-update**. Or update by hand:
+`/plugin` → **Marketplaces** → `lucas-tools` → **Enable auto-update**. Or update by hand:
 
 ```
-claude plugin update handoff-terminal@lucas-plugins
+claude plugin update handoff-terminal@lucas-tools
 ```
 
 Once a day the plugin also checks GitHub in the background. When a newer version exists, the
@@ -200,7 +200,7 @@ Otherwise it opens the browser with the report filled in. You can also
 
 ## Settings
 
-Plugin options (`/plugin configure handoff-terminal@lucas-plugins`):
+Plugin options (`/plugin configure handoff-terminal@lucas-tools`):
 
 - `scope`: `all` (default) or `sign-in`.
 - `notes_file`: your instructions for the terminal session. Default `~/.config/handoff-terminal/notes.md`.

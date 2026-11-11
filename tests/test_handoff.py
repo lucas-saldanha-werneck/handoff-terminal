@@ -460,12 +460,12 @@ class VersionTest(unittest.TestCase):
     def test_plugin_id_follows_the_install(self):
         import common as c
         cache = os.path.join(os.sep, "home", "u", ".claude", "plugins", "cache")
-        self.assertEqual(c.plugin_id(os.path.join(cache, "lucas-plugins", "handoff-terminal", "0.7.3")),
-                         "handoff-terminal@lucas-plugins")
+        self.assertEqual(c.plugin_id(os.path.join(cache, "lucas-tools", "handoff-terminal", "0.7.3")),
+                         "handoff-terminal@lucas-tools")
         self.assertEqual(c.plugin_id(os.path.join(cache, "handoff-terminal", "handoff-terminal", "0.7.2")),
                          "handoff-terminal@handoff-terminal")
         self.assertEqual(c.plugin_id(os.path.join(os.sep, "src", "handoff-terminal")),
-                         "handoff-terminal@lucas-plugins")
+                         "handoff-terminal@lucas-tools")
 
 
 class PasswordManagerTest(unittest.TestCase):

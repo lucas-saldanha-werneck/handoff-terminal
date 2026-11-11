@@ -71,7 +71,7 @@ def saved_options():
     the CLAUDE_PLUGIN_OPTION_* variables, so read them from settings.json."""
     data = c.read_json(os.path.expanduser("~/.claude/settings.json")) or {}
     configs = data.get("pluginConfigs") or {}
-    entry = configs.get(c.plugin_id()) or configs.get("handoff-terminal@lucas-plugins") \
+    entry = configs.get(c.plugin_id()) or configs.get("handoff-terminal@lucas-tools") \
         or configs.get("handoff-terminal@handoff-terminal") or {}
     return entry.get("options") or {}
 

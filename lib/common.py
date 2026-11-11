@@ -338,11 +338,11 @@ def plugin_version(root=None):
 def marketplace(root=None):
     """Marketplace this copy was installed from. Installed plugins live in
     ~/.claude/plugins/cache/<marketplace>/<plugin>/<version>; anything else (a clone, --plugin-dir)
-    counts as the catalog, lucas-plugins."""
+    counts as the catalog, lucas-tools."""
     parts = os.path.normpath(root or ROOT).split(os.sep)
     if len(parts) >= 4 and parts[-4] == "cache":
         return parts[-3]
-    return "lucas-plugins"
+    return "lucas-tools"
 
 
 def plugin_id(root=None):
