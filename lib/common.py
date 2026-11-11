@@ -55,8 +55,38 @@ def is_app_session():
     """True only inside a Claude desktop app session (or when a test forces it)."""
     if os.environ.get("HANDOFF_CHILD"):
         return False  # the terminal session we started: never hand off again
-    return (os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "claude-desktop"
-            or bool(os.environ.get("HANDOFF_FORCE")))
+    if os.environ.get("HANDOFF_FORCE"):
+        return True
+    # The entrypoint can be INHERITED by a terminal session (a tmux server started from an app session
+    # keeps CLAUDE_CODE_ENTRYPOINT=claude-desktop for every pane): a terminal above us means not the app.
+    return os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "claude-desktop" and not under_terminal()
+
+
+def under_terminal():
+    """True when an ancestor process has a terminal (the terminal's `claude`); app sessions have none.
+    HANDOFF_UNDER_TERMINAL=1/0 forces the answer (tests). Unknown (no ps, Windows) = False."""
+    forced = os.environ.get("HANDOFF_UNDER_TERMINAL")
+    if forced in ("0", "1"):
+        return forced == "1"
+    import subprocess
+    try:
+        out = subprocess.run(["ps", "-axo", "pid=,ppid=,tty="], capture_output=True, text=True,
+                             timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    procs = {}
+    for ln in out.splitlines():
+        parts = ln.split()
+        if len(parts) >= 3 and parts[0].isdigit() and parts[1].isdigit():
+            procs[int(parts[0])] = (int(parts[1]), parts[2])
+    p, seen = os.getpid(), set()
+    while p in procs and p not in seen and p > 1:
+        seen.add(p)
+        ppid, tty = procs[p]
+        if tty not in ("??", "?", "-"):
+            return True
+        p = ppid
+    return False
 
 
 def dry_run():

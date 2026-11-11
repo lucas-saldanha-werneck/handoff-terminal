@@ -235,6 +235,17 @@ class HookRun(unittest.TestCase):
         env["HANDOFF_CHILD"] = "1"
         self.assertIsNone(self.run_hook("stop.py", payload, env))
 
+    def test_inherited_app_entrypoint_under_a_terminal_is_not_the_app(self):
+        from unittest import mock
+        import common as c
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_ENTRYPOINT": "claude-desktop",
+                                          "HANDOFF_UNDER_TERMINAL": "1"}):
+            os.environ.pop("HANDOFF_FORCE", None)
+            os.environ.pop("HANDOFF_CHILD", None)
+            self.assertFalse(c.is_app_session())
+            os.environ["HANDOFF_UNDER_TERMINAL"] = "0"
+            self.assertTrue(c.is_app_session())
+
     def stop_all(self, last, prompts):
         env = dict(self.env, HANDOFF_SCOPE="all")
         payload = {"hook_event_name": "Stop", "session_id": "test-session-2", "cwd": self.tmp.name,

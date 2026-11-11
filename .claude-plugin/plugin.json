@@ -1,6 +1,6 @@
 {
   "name": "handoff-terminal",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "A terminal session does the sign-in steps the desktop app refuses.",
   "author": {
     "name": "Lucas Saldanha Werneck",
