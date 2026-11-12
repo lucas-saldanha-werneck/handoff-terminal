@@ -5,7 +5,8 @@ Runs only in Claude desktop app sessions (CLAUDE_CODE_ENTRYPOINT=claude-desktop)
 
 1. The app's reply ends with the line  HANDOFF-TERMINAL: <site> | <step>
    (the nudge hook asks for it). Nothing happens for replies that only mention it.
-2. The site must be named in the user's own messages. This is checked here, in code,
+2. The site's domain must be written in the user's own messages (a bare name such as
+   "Zona Sul" is not enough). This is checked here, in code,
    so a web page cannot send the terminal session to a site the user never asked for.
    If the site is new, the app is told to ask the user to confirm it by name.
 3. A brief is written (mode 0600) and the launcher starts a terminal session that only
@@ -68,6 +69,8 @@ def user_prompts(path):
             continue
         if not isinstance(entry, dict) or entry.get("type") != "user" or entry.get("isMeta"):
             continue
+        if entry.get("isCompactSummary") or entry.get("isVisibleInTranscriptOnly"):
+            continue  # a /compact summary is written by the model, not typed by the user
         text = text_of((entry.get("message") or {}).get("content")).strip()
         if text and not text.startswith(NOT_USER):
             out.append(text)
@@ -211,8 +214,8 @@ def handle_marker(data, sid, site, step):
         if not recent:
             c.write_private(flag, "")
             c.context("Stop", "handoff-terminal: I did not start the terminal session, because the user "
-                              "has not named %s in this conversation. Ask the user, in one short "
-                              "sentence, to confirm by replying with the site name (for example "
+                              "has not written the domain %s in this conversation. Ask the user, in one "
+                              "short sentence, to confirm by replying with the domain (for example "
                               "\"yes, %s\"). After they confirm, write the HANDOFF-TERMINAL line again. "
                               "Do not use any other site." % (site, d.site_host(site) or site))
         return
@@ -239,6 +242,7 @@ def handle_marker(data, sid, site, step):
         cwd = os.path.expanduser("~")
     hid = c.new_id()
     name = "handoff %s %s" % (key[:24], time.strftime("%H%M"))
+    site = d.valid_host(site)  # parse_marker already did this; keep only a plain host in the brief
     brief = write_brief(hid, site, step, cwd, users)
     prompt = "Hand-off from the Claude desktop app. Read and follow the brief at %s" % brief
     status, out = launch(cwd, name, prompt)

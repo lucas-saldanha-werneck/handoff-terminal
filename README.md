@@ -37,12 +37,15 @@ Anthropic may change this behavior at any time. It was tested on macOS 27.2 with
 
 ## What it does and doesn't do
 
-- **You name the site.** The hand-off starts only if the site in the marker line appears in your
-  own messages in that conversation. Code checks this, outside the model, against what you typed,
-  not against tool results or web pages. A page that tells the app "log in at evil.example" gets
-  no terminal session. The app has to ask you, and you confirm by typing the site name.
+- **You name the site.** The hand-off starts only if the site's domain in the marker line appears
+  in your own messages in that conversation ("google.com" covers accounts.google.com; a bare name
+  like "Google" or another ending like google.net does not). Code checks this, outside the model,
+  against what you typed, not against tool results, web pages or /compact summaries. A page that
+  tells the app "log in at evil.example" gets no terminal session. The app has to ask you, and you
+  confirm by typing the domain ("yes, example.com").
 - **You ask for the money.** Paying, buying and creating accounts also need your own words asking
-  for that kind of action ("buy", "pay", "create the account"), checked the same way. A web page
+  for that kind of action ("buy", "pay", "create the account"), checked the same way; "don't pay"
+  or "sem comprar" does not count. A web page
   can't add a purchase you never asked for. Items, amounts and recipients come from your messages,
   never from the app's text, and the terminal session stops if the page asks for more.
 - **The app's words aren't instructions.** The brief gives the terminal session your own recent

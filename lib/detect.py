@@ -80,9 +80,32 @@ def action_kinds(text):
     return {kind for kind, rx in ACTIONS.items() if rx.search(t)}
 
 
+# A negation just before an action word in the same clause: "don't pay", "não pague", "sem comprar".
+_NEGATION = re.compile(r"\b(don'?t|do not|does not|doesn'?t|not|never|no|without|nor|avoid|stop|"
+                       r"nao|nunca|sem|nem|jamais|evite)\b")
+_CLAUSE_END = re.compile(r"[.,;:!?()\n]|\b(but|then|and then|mas|e depois|depois)\b")
+
+
+def _asked_kinds(text):
+    """Action kinds the text asks for, leaving out mentions that are negated in their clause."""
+    t = norm(text)
+    kinds = set()
+    for kind, rx in ACTIONS.items():
+        for m in rx.finditer(t):
+            before = t[max(0, m.start() - 40):m.start()]
+            ends = list(_CLAUSE_END.finditer(before))
+            if ends:
+                before = before[ends[-1].end():]
+            if not _NEGATION.search(before):
+                kinds.add(kind)
+                break
+    return kinds
+
+
 def actions_authorized(step, user_texts):
-    """True when every kind of action in the step also appears in the user's own messages."""
-    return action_kinds(step) <= action_kinds(" ".join(user_texts or []))
+    """True when every kind of action in the step is also asked for, not negated, in the user's
+    own messages ("don't pay" or "sem comprar" does not count)."""
+    return action_kinds(step) <= set().union(*[_asked_kinds(u) for u in (user_texts or [])] or [set()])
 
 
 def is_refusal(text):
@@ -118,9 +141,10 @@ def parse_marker(text):
     if "|" not in body:
         return "", ""
     site, step = (part.strip(" `*_\"'") for part in body.split("|", 1))
-    if not site_key(site) or not step:
+    host = valid_host(site)
+    if not host or not step:
         return "", ""
-    return site, step[:300]
+    return host, step[:300]
 
 
 def site_host(site):
@@ -128,6 +152,29 @@ def site_host(site):
     s = re.sub(r"^[a-z][a-z0-9+.-]*://", "", s)
     s = s.split("/")[0].split("?")[0].split("#")[0].split("@")[-1].split(":")[0]
     return s[4:] if s.startswith("www.") else s
+
+
+_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+_HOST = re.compile(r"(?:%s\.)+[a-z][a-z0-9-]*[a-z0-9]" % _LABEL)
+# A domain written in free text, not glued to a longer name: "drdevil.com" does not contain "devil.com".
+_HOST_IN_TEXT = re.compile(r"(?<![a-z0-9.-])(%s)(?![a-z0-9-]|\.[a-z0-9])" % _HOST.pattern)
+
+
+def valid_host(site):
+    """The normalized host of a marker's site field ("https://www.Example.com/x" -> "example.com"),
+    or "" when it is not a plain domain name (spaces, markup, a bare name like "Zona Sul")."""
+    raw = (site or "").strip()
+    if not raw or any(ch.isspace() for ch in raw) or len(raw) > 300:
+        return ""
+    host = site_host(raw)
+    return host if len(host) <= 253 and _HOST.fullmatch(host) else ""
+
+
+def registrable(host):
+    """The registrable domain: "login.zonasul.com.br" -> "zonasul.com.br", "a.google.com" -> "google.com"."""
+    labels = host.split(".")
+    n = 3 if len(labels) >= 3 and ".".join(labels[-2:]) in _SUFFIX2 else 2
+    return ".".join(labels[-n:])
 
 
 def site_key(site):
@@ -144,16 +191,21 @@ def site_key(site):
 
 
 def site_authorized(site, user_texts):
-    """True when the user's own messages name the site. This check runs in code, outside the
-    model, so text from a web page cannot add a new site on its own.
+    """True when the user's own messages write the site's domain. This check runs in code,
+    outside the model, so text from a web page cannot add a new site on its own.
 
-    Short names (under 4 letters, like "x.com" or "ssa.gov") must appear with their domain ending.
+    The user must have written a domain with the same registrable domain as the site
+    ("google.com" covers accounts.google.com). A bare name ("Zona Sul", "Google") or another
+    ending (google.net) is not enough: the app then asks the user to confirm the domain.
     """
-    key = site_key(site)
-    if not key:
+    host = valid_host(site)
+    if not host:
         return False
-    said = compact(" ".join(user_texts or []))
-    if len(key) >= 4:
-        return key in said
-    host = compact(site_host(site))
-    return bool(host) and host in said
+    want = registrable(host)
+    for text in user_texts or []:
+        for m in _HOST_IN_TEXT.finditer(norm(text)):
+            said = m.group(1)
+            said = said[4:] if said.startswith("www.") else said
+            if registrable(said) == want:
+                return True
+    return False
