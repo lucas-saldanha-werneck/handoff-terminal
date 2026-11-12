@@ -445,10 +445,11 @@ class LaunchCommandTest(unittest.TestCase):
 
     def test_windowless_command(self):
         mac = self.launch.pty_command("exec env HANDOFF_CHILD=1 claude 'x'", "/bin/zsh", "darwin")
-        self.assertTrue(mac.startswith("export HANDOFF_PGID=$$; tail -f /dev/null | script -q /dev/null /bin/zsh -lc "))
+        self.assertTrue(mac.startswith("export HANDOFF_PGID=$$; tail -f /dev/null | { script -q /dev/null /bin/zsh -lc "))
+        self.assertTrue(mac.endswith("; kill 0; }"))
         linux = self.launch.pty_command("exec claude", "/bin/bash", "linux")
         self.assertIn("script -q -c ", linux)
-        self.assertTrue(linux.endswith(" /dev/null"))
+        self.assertTrue(linux.endswith(" /dev/null; kill 0; }"))
 
 
 class DoneWaitTest(unittest.TestCase):
@@ -721,6 +722,174 @@ class BugReportTest(unittest.TestCase):
 
     def test_send_without_report_fails(self):
         self.assertNotEqual(self.cmd("send", os.path.join(self.state, "nope.md")).returncode, 0)
+
+    def test_text_from_stdin_is_not_shell_code(self):
+        text = "it broke after $(echo pwned) and `id`"
+        r = subprocess.run([sys.executable, os.path.join(BIN, "handoff-bug"), "draft", "-"], input=text,
+                           capture_output=True, text=True, env=self.env, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        with open(os.path.join(self.state, "bug-report.md")) as f:
+            self.assertIn(text, f.read())
+        r = subprocess.run([sys.executable, os.path.join(BIN, "handoff-bug"), "send",
+                            os.path.join(self.state, "bug-report.md"), "--title", "-"],
+                           input="Title with $(x)\n", capture_output=True, text=True, env=self.env, timeout=30)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("Title+with+%24%28x%29", r.stdout)
+        with open(os.path.join(ROOT, "skills", "bug", "SKILL.md")) as f:
+            skill = f.read()
+        self.assertNotIn('draft "<', skill)
+        self.assertIn("<<'EOF'", skill)
+
+
+# ---------------------------------------------------------------- audit round 2
+
+# Fake keys, built at run time so no key-shaped literal sits in the source.
+FAKE_SK = "sk" + "-proj-" + "AbCdEf0123456789XyZ"
+FAKE_GH = "ghp" + "_" + "0123456789abcdefABCDEF0123456789abcd"
+FAKE_JWT = "eyJ" + "hbGciOiJIUzI1NiJ9" + ".eyJ" + "zdWIiOiIxIn0.abc123def456"
+
+
+class SecretMaskTest(unittest.TestCase):
+    def test_secrets_are_masked(self):
+        import common as c
+        text = ("log into zonasul.com.br, my password is hunter2xyz! and the senha: Abc123$ "
+                "key %s and %s card 4111 1111 1111 1111 token=%s" % (FAKE_SK, FAKE_GH, FAKE_JWT))
+        out = c.mask_secrets(text)
+        for leak in ("hunter2xyz", "Abc123$", FAKE_SK, FAKE_GH[:12], "4111 1111 1111 1111", FAKE_JWT[:12]):
+            with self.subTest(leak=leak):
+                self.assertNotIn(leak, out)
+        self.assertIn("zonasul.com.br", out)
+        self.assertIn("log into", out)
+        # ordinary text and numbers stay
+        for keep in ("use the password manager", "order 12345 costs 99.90", "call me at 3pm",
+                     "the code is in src/app.py", "hand-off 20261107-055723-185b2a"):
+            with self.subTest(keep=keep):
+                self.assertEqual(c.mask_secrets(keep), keep)
+
+
+class PruneTest(unittest.TestCase):
+    def test_prune_only_touches_own_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            old = 1_000_000_000
+            names = ["notes.txt", "brief-1.md", "result-1.json", "pending-s.json", "confirm-s-x",
+                     "nudged-s-x", "malformed-s-x", "repeat-s-x", "bug-report.md", "handoff.log", "s.lock"]
+            for n in names:
+                p = os.path.join(tmp, n)
+                pathlib.Path(p).write_text("x")
+                os.utime(p, (old, old))
+            env = dict(os.environ, HANDOFF_STATE_DIR=tmp)
+            r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, %r); import common; "
+                                "common.prune()" % os.path.join(ROOT, "lib")], env=env, capture_output=True,
+                               text=True, timeout=20)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertEqual(sorted(os.listdir(tmp)), ["handoff.log", "notes.txt", "s.lock"])
+
+
+class AuditHookTest(HookRun):
+    def test_secret_in_user_message_is_not_in_brief(self):
+        self.stop("HANDOFF-TERMINAL: zonasul.com.br | sign in",
+                  prompts=("log into zonasul.com.br, my password is hunter2xyz",))
+        with open(os.path.join(self.state, self.files("brief-")[0])) as f:
+            brief = f.read()
+        self.assertNotIn("hunter2xyz", brief)
+        self.assertIn("log into zonasul.com.br", brief)
+
+    def test_same_step_after_result_is_held_until_the_user_writes(self):
+        marker = "HANDOFF-TERMINAL: zonasul.com.br | sign in"
+        out = self.stop(marker)
+        self.assertIn("handoff-wait", out["hookSpecificOutput"]["additionalContext"])
+        with open(os.path.join(self.state, self.files("pending-")[0])) as f:
+            pend = json.load(f)
+        pathlib.Path(self.state, "result-%s.json" % pend["id"]).write_text('{"status": "ok"}')
+        out = self.stop(marker)
+        self.assertIn("already did", out["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(len(self.files("brief-")), 1)
+        self.assertIsNone(self.stop(marker))  # asked once, no loop
+        out = self.stop(marker, prompts=("log into zonasul.com.br and check my cart", "yes, do it again"))
+        self.assertIn("handoff-wait", out["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(len(self.files("brief-")), 2)
+
+    def test_scope_all_brief_allows_only_gated_actions(self):
+        self.stop_all("HANDOFF-TERMINAL: zonasul.com.br | sign in", ("compre o carrinho no zonasul.com.br",))
+        with open(os.path.join(self.state, self.files("brief-")[0])) as f:
+            brief = f.read()
+        self.assertIn("Do not buy, pay", brief)
+        self.assertIn("Do not create accounts", brief)
+        self.assertNotIn("pay, buy or create the account", brief)
+
+    def test_bad_wait_seconds_does_not_break_hooks(self):
+        env = dict(self.env, HANDOFF_WAIT_SECONDS="30m")
+        out = self.run_hook("nudge.py", {"hook_event_name": "UserPromptSubmit",
+                                         "prompt": "log into my bank with my SSN"}, env)
+        self.assertIn("HANDOFF-TERMINAL", out["hookSpecificOutput"]["additionalContext"])
+        payload = {"hook_event_name": "Stop", "session_id": "w", "cwd": self.tmp.name,
+                   "transcript_path": self.transcript("log into zonasul.com.br"),
+                   "last_assistant_message": "HANDOFF-TERMINAL: zonasul.com.br | sign in"}
+        out = self.run_hook("stop.py", payload, env)
+        self.assertIn("up to 30 minutes", out["hookSpecificOutput"]["additionalContext"])
+
+
+@unittest.skipIf(os.name == "nt", "the windowless launcher is for macOS and Linux")
+class LaunchRealTest(unittest.TestCase):
+    """Starts the bundled launcher for real (no tmux) with a fake `claude`."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = os.path.realpath(self.tmp.name)
+        self.bin = os.path.join(self.dir, "bin")
+        self.home = os.path.join(self.dir, "home")
+        self.work = os.path.join(self.dir, "work")
+        for p in (self.bin, self.home, self.work):
+            os.makedirs(p)
+        self.ran = os.path.join(self.dir, "ran.txt")
+        self.groups = []
+
+    def tearDown(self):
+        import signal
+        for g in self.groups:
+            try:
+                os.killpg(g, signal.SIGTERM)
+            except OSError:
+                pass
+        self.tmp.cleanup()
+
+    def fake_claude(self, body):
+        path = os.path.join(self.bin, "claude")
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\necho \"HANDOFF_CHILD=$HANDOFF_CHILD $*\" > %s\n%s\n" % (self.ran, body))
+        os.chmod(path, 0o755)
+
+    def launch(self, path_dirs):
+        env = {"PATH": os.pathsep.join(path_dirs + ["/usr/bin", "/bin"]), "HOME": self.home, "SHELL": "/bin/sh",
+               "HANDOFF_NO_TMUX": "1", "CLAUDE_CONFIG_DIR": self.home, "HANDOFF_LAUNCH_CHECK": "3"}
+        r = subprocess.run([sys.executable, os.path.join(BIN, "handoff-launch"), self.work, "handoff test 0101",
+                            "read the brief"], capture_output=True, text=True, env=env, timeout=30)
+        import re
+        m = re.search(r"process group (\d+)", r.stdout + r.stderr)
+        if m:
+            self.groups.append(int(m.group(1)))
+        return r
+
+    def test_session_stays_alive(self):
+        self.fake_claude("sleep 60")
+        r = self.launch([self.bin])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        with open(self.ran) as f:
+            ran = f.read()
+        self.assertIn("HANDOFF_CHILD=1", ran)
+        self.assertIn("--no-chrome", ran)
+        self.assertIn("read the brief", ran)
+        os.killpg(self.groups[0], 0)  # still running: no error
+
+    def test_claude_that_exits_right_away_is_a_failure(self):
+        self.fake_claude("exit 1")
+        r = self.launch([self.bin])
+        self.assertNotEqual(r.returncode, 0, r.stdout)
+        self.assertIn("ended right away", r.stderr)
+
+    def test_missing_claude_is_a_failure(self):
+        r = self.launch([])
+        self.assertNotEqual(r.returncode, 0, r.stdout)
 
 
 if __name__ == "__main__":

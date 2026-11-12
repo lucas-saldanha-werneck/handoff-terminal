@@ -21,6 +21,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 
 # Variables a desktop app session passes to its children. The new session must not inherit
 # them, or it would think it is running inside the app.
@@ -103,13 +104,25 @@ def pty_command(inner, shell, platform):
 
     `tail -f /dev/null` keeps the input open, so the session waits instead of reading end-of-file.
     HANDOFF_PGID lets handoff-done close the whole process group when the step is over.
+    When the session ends (or claude never starts), `kill 0` ends the group too, `tail` included,
+    so the launcher can see that it is gone.
     """
     login = "%s -lc %s" % (shlex.quote(shell), shlex.quote(inner))
     if platform == "darwin":
         pty = "script -q /dev/null " + login
     else:  # util-linux
         pty = "script -q -c %s /dev/null" % shlex.quote(login)
-    return "export HANDOFF_PGID=$$; tail -f /dev/null | " + pty
+    return "export HANDOFF_PGID=$$; tail -f /dev/null | { %s; kill 0; }" % pty
+
+
+def still_running(p, seconds):
+    """True when the process is alive after `seconds` (HANDOFF_LAUNCH_CHECK, default 5)."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if p.poll() is not None:
+            return False
+        time.sleep(0.2)
+    return p.poll() is None
 
 
 def main():
@@ -138,6 +151,14 @@ def main():
         p = subprocess.Popen(["/bin/sh", "-c", pty_command(inner, shell, sys.platform)], cwd=folder,
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              start_new_session=True)
+        try:
+            check = float(os.environ.get("HANDOFF_LAUNCH_CHECK") or 5)
+        except ValueError:
+            check = 5.0
+        if not still_running(p, check):
+            print("handoff-launch: the session ended right away (process group %d). Check that `claude` "
+                  "runs from a login shell (%s -lc claude)." % (p.pid, shell), file=sys.stderr)
+            return 1
         print("started without a window (process group %d; follow it through Remote Control)" % p.pid)
         return 0
     argv = tmux_argv(tmux, folder, name, inner, shell)

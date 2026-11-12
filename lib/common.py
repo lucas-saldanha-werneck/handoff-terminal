@@ -2,7 +2,7 @@
 
 Everything here is standard-library Python 3.8+. Nothing in this file prints secrets or
 writes them to disk: the state folder holds hand-off ids, site names, the user's own
-recent prompts (in the brief, mode 0600) and one-line result notes.
+recent prompts with secret-looking text masked (in the brief, mode 0600) and one-line result notes.
 """
 import contextlib
 import hashlib
@@ -43,7 +43,18 @@ LAUNCHER = _setting("CLAUDE_PLUGIN_OPTION_LAUNCHER", "HANDOFF_LAUNCHER") or os.p
 #   accounts. Paying, buying and creating accounts also need the user's own words asking for them.
 # "sign-in": the terminal session only signs in.
 SCOPE = "sign-in" if _setting("CLAUDE_PLUGIN_OPTION_SCOPE", "HANDOFF_SCOPE").lower() == "sign-in" else "all"
-WAIT_MAX = int(os.environ.get("HANDOFF_WAIT_SECONDS") or 1800)
+
+
+def _wait_max(default=1800):
+    """HANDOFF_WAIT_SECONDS as a positive whole number; anything else ("30m", "-5") = the default."""
+    try:
+        value = int((os.environ.get("HANDOFF_WAIT_SECONDS") or "").strip() or default)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+WAIT_MAX = _wait_max()
 RETENTION_DAYS = 7
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,63}$")
 MARKER = "HANDOFF-TERMINAL"
@@ -139,6 +150,48 @@ def fence(text):
     return "~~~text\n" + body.strip() + "\n~~~"
 
 
+_SECRET = "[secret removed]"
+_SECRET_PATTERNS = (
+    # "password is x", "senha: x", "api key = x"
+    re.compile(r"(?i)\b(password|passphrase|passwd|senha|pin|token|api[ _-]?key|secret|chave)"
+               r"(\s*(?:is\b|é|eh\b|=|:)\s*)[\"'`]?([^\s\"'`]+?)(?=[.,;!?]?(?:[\s\"'`]|$))"),
+    # well-known key formats
+    re.compile(r"\b(sk|pk|rk)[-_](live_|test_|proj-|ant-)?[A-Za-z0-9_-]{16,}"),
+    re.compile(r"\b(ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}|\bgithub_pat_[A-Za-z0-9_]{20,}"),
+    re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}|\bAKIA[0-9A-Z]{16}\b|\bAIza[0-9A-Za-z_-]{30,}|\bglpat-[A-Za-z0-9_-]{16,}"),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{6,}"),  # JWT
+    # any long run of letters AND digits (keys, tokens), with no dots, so domains stay
+    re.compile(r"(?<![\w.-])(?=[A-Za-z0-9_+=-]*\d)(?=[A-Za-z0-9_+=-]*[A-Za-z])[A-Za-z0-9_+=-]{32,}(?![\w.-])"),
+)
+_CARD = re.compile(r"(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)")
+
+
+def _luhn(digits):
+    total, alt = 0, False
+    for ch in reversed(digits):
+        n = int(ch)
+        if alt:
+            n = n * 2 - 9 if n > 4 else n * 2
+        total, alt = total + n, not alt
+    return total % 10 == 0
+
+
+def mask_secrets(text):
+    """Replace text that looks like a password, API key, token or card number with a marker.
+    Used on the user's messages before they go into a brief on disk."""
+    text = str(text or "")
+    for rx in _SECRET_PATTERNS:
+        if rx.groups >= 3:
+            text = rx.sub(lambda m: m.group(1) + m.group(2) + _SECRET, text)
+        else:
+            text = rx.sub(_SECRET, text)
+
+    def card(m):
+        digits = re.sub(r"\D", "", m.group())
+        return _SECRET if 13 <= len(digits) <= 19 and _luhn(digits) else m.group()
+    return _CARD.sub(card, text)
+
+
 # ---------------------------------------------------------------- files
 
 def safe_name(value):
@@ -231,15 +284,21 @@ def log(message):
         pass
 
 
+# Files this plugin writes in the state folder. prune() deletes only these, so a HANDOFF_STATE_DIR
+# that points at a folder with other files never loses them.
+OWN_PREFIXES = ("brief-", "result-", "pending-", "confirm-", "malformed-", "nudged-", "repeat-",
+                "bug-report.md")
+
+
 def prune():
-    """Delete briefs, results and markers older than RETENTION_DAYS."""
+    """Delete this plugin's briefs, results and markers older than RETENTION_DAYS."""
     limit = time.time() - RETENTION_DAYS * 86400
     try:
         names = os.listdir(STATE)
     except OSError:
         return
     for name in names:
-        if name == "handoff.log" or name.endswith(".lock"):
+        if not name.startswith(OWN_PREFIXES) or name.endswith(".lock"):
             continue
         path = os.path.join(STATE, name)
         with contextlib.suppress(OSError):
