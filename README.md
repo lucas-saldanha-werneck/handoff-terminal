@@ -47,13 +47,19 @@ Anthropic may change this behavior at any time. It was tested on macOS 27.2 with
   for that kind of action ("buy", "pay", "create the account"), checked the same way; "don't pay"
   or "sem comprar" does not count. A web page
   can't add a purchase you never asked for. Items, amounts and recipients come from your messages,
-  never from the app's text, and the terminal session stops if the page asks for more.
+  never from the app's text, and the terminal session stops if the page asks for more. The brief
+  allows paying or creating an account only when the app's step asks for it and passed this check.
+- **No repeats by accident.** Once a hand-off has finished, the same site and step does not start
+  again until you write a new message in the app.
 - **The app's words aren't instructions.** The brief gives the terminal session your own recent
   messages and the site. The app's description of the step goes in a fenced block marked
   untrusted. The one-line result note that comes back is marked as data too.
 - **Secrets stay in your password manager.** The terminal session gets them the way your notes
   file says. Briefs, results and the log are `0600` files in a `0700` folder, and they're deleted
-  after 7 days. Secrets are never written there.
+  after 7 days (only the plugin's own files are deleted, even if `HANDOFF_STATE_DIR` points at a
+  shared folder). Your messages are copied into the brief with anything that looks like a password
+  (`password is ...`, `senha: ...`), an API key or token, or a card number replaced by
+  `[secret removed]`; type secrets into your password manager, not the chat.
 - **Desktop app only.** The hooks do nothing in terminal, IDE or SDK sessions, or in the session
   they start.
 - The terminal session runs in your normal permission mode. Don't run it with
@@ -212,7 +218,9 @@ Plugin options (`/plugin configure handoff-terminal@lucas-tools`):
 
 Environment variables (advanced): `HANDOFF_SCOPE`, `HANDOFF_NOTES` and `HANDOFF_LAUNCHER` do the
 same as the options. `HANDOFF_STATE_DIR` (default `~/.claude/state/handoff-terminal`),
-`HANDOFF_WAIT_SECONDS` (default `1800`), `HANDOFF_REMOTE_CONTROL=0` (start without Remote Control),
+`HANDOFF_WAIT_SECONDS` (default `1800`; a value that is not a whole number of seconds uses the
+default), `HANDOFF_LAUNCH_CHECK` (seconds the windowless launcher waits to check that the session
+is still running, default `5`), `HANDOFF_REMOTE_CONTROL=0` (start without Remote Control),
 `HANDOFF_NO_UPDATE_CHECK=1` (no daily version check).
 
 ## How it works
