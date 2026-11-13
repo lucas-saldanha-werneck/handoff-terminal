@@ -3,9 +3,15 @@ name: bug
 description: Report a handoff-terminal bug on GitHub. Collects the versions and a log with sites, ids and paths removed, shows you the report, and sends it only after you say yes.
 argument-hint: "[what went wrong]"
 disable-model-invocation: true
+metadata:
+  author: Lucas Saldanha Werneck <lucas@2olhares.com>
 ---
 
+# Report a handoff-terminal bug
+
 The user wants to report a bug in the handoff-terminal plugin. What they typed: $ARGUMENTS
+
+## Instructions
 
 1. If they did not say what went wrong, ask in one short question. Wait for the answer.
 2. Write the problem in 1–3 plain sentences: what they did, what they expected, what happened.
@@ -29,3 +35,11 @@ The user wants to report a bug in the handoff-terminal plugin. What they typed: 
 6. Give the user the link it prints. If it opened the browser, tell them to press Submit there.
 
 Never send without the yes. Never add anything to the report that the user did not see.
+
+## Examples
+
+- `/handoff-terminal:bug the terminal session opened but the app never continued`: writes the problem in a
+  few plain sentences, runs `handoff-bug draft`, shows the whole report and a short title, and asks
+  "Send this to GitHub?". Only after a clear yes does it run `handoff-bug send` and give the link.
+- `/handoff-terminal:bug` with nothing after it: asks in one short question what went wrong, then continues the same way.
+- The user wants a change to the draft: edit the report file printed after `REPORT FILE:` and show it again before asking.
