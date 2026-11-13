@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/lucas-saldanha-werneck/handoff-terminal/actions/workflows/test.yml/badge.svg)](https://github.com/lucas-saldanha-werneck/handoff-terminal/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/lucas-saldanha-werneck/handoff-terminal)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.9-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.10-blue)](CHANGELOG.md)
+[![SkillEvaluator](https://img.shields.io/badge/SkillEvaluator-8%2F8-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
+[![bug score](https://img.shields.io/badge/skill%20score-96.2%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
 
 When the Claude desktop app won't type your password, personal data, API key or payment details,
 a terminal Claude Code session does that one step, and the app carries on with the rest of your

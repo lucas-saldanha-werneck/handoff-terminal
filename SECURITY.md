@@ -8,7 +8,7 @@ security problem.
 
 ## Supported versions
 
-Only the latest release (0.7.9) is supported. Fixes go into a new release.
+Only the latest release (0.7.10) is supported. Fixes go into a new release.
 
 ## What handoff-terminal accesses
 
