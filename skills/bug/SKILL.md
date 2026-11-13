@@ -1,13 +1,19 @@
 ---
 name: bug
-description: Report a handoff-terminal bug on GitHub. Collects the versions and a log with sites, ids and paths removed, shows you the report, and sends it only after you say yes.
+description: 'Report a handoff-terminal bug on GitHub. Use when the user wants to report a problem with the handoff-terminal plugin. Collects the versions and a log with sites, ids and paths removed, shows the user the report, and sends it only after a clear yes.'
 argument-hint: "[what went wrong]"
 disable-model-invocation: true
+version: "0.7.10"
 metadata:
   author: Lucas Saldanha Werneck <lucas@2olhares.com>
+  tags: [bug-report, github, support]
 ---
 
 # Report a handoff-terminal bug
+
+## Purpose
+
+Let the user report a handoff-terminal bug in one step: a draft report with versions and a cleaned log, shown in full before anything is sent.
 
 The user wants to report a bug in the handoff-terminal plugin. What they typed: $ARGUMENTS
 
@@ -35,6 +41,21 @@ The user wants to report a bug in the handoff-terminal plugin. What they typed: 
 6. Give the user the link it prints. If it opened the browser, tell them to press Submit there.
 
 Never send without the yes. Never add anything to the report that the user did not see.
+
+## Prerequisites
+
+- python3 (3.8+) and the handoff-terminal plugin enabled.
+- Optional: a signed-in gh CLI. Without it, sending opens the browser on a new issue with the report already filled in.
+
+## Limitations
+
+- The issue is public: the user must see and approve the whole report first.
+- Names, passwords, codes, addresses and site names are left out of the sentences; the log has sites, ids and paths removed.
+
+## Troubleshooting
+
+- Error "no report at ...": the draft step was skipped. Run it first.
+- Error from gh (it could not create the issue): the tool says so and uses the browser instead; tell the user to press Submit there.
 
 ## Examples
 

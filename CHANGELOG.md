@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.7.10 (2026-11-13)
+
+- Skill schema and score: third-person description with a When clause, version and tags, Purpose, Prerequisites, Limitations and Troubleshooting; add SkillEvaluator badges.
+
 ## [0.7.9] - 2026-11-13
 - Skill author, Instructions and Examples sections.
 
