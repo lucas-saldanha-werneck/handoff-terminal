@@ -2,33 +2,38 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 0.7.10 (2026-11-13)
-
-- Skill schema and score: third-person description with a When clause, version and tags, Purpose, Prerequisites, Limitations and Troubleshooting; add SkillEvaluator badges.
+## [0.7.10] - 2026-11-13
+- Bug skill: the description says when to use it; version and tags; Purpose, Prerequisites, Limitations and Troubleshooting sections.
+- README: demo video, plugin check and skill score badges; adds SECURITY.md.
 
 ## [0.7.9] - 2026-11-13
 - Skill author, Instructions and Examples sections.
 
 ## [0.7.8] - 2026-11-12
-- Fixes from the second audit.
+- Secret-looking text in the user messages copied into the brief is masked; the brief allows only actions that passed the gate.
+- The same site and step is not started again without a new user message; the windowless launcher checks the session is still running.
+- Cleanup deletes only the plugin's own files; `/bug` passes free text through stdin.
 
 ## [0.7.7] - 2026-11-11
-- Tighter site and action gates.
+- Tighter site gate: the user must write a domain with the same registrable domain as the site.
+- Negated mentions ("don't pay") do not count as asking for the action; `/compact` summaries are not read as the user's words.
 
 ## [0.7.6] - 2026-11-11
 - A session with a terminal above it is not treated as an app session.
 
 ## [0.7.5] - 2026-11-11
-- Maintenance (catalog renamed to `lucas-tools`).
+- Points to the catalog repo's new name, `lucas-tools`.
 
 ## [0.7.4] - 2026-11-11
-- Maintenance (catalog renamed to `lucas-tools`).
+- Catalog renamed to `lucas-tools`.
 
 ## [0.7.3] - 2026-11-09
-- Maintenance (short description, catalog install instructions).
+- Docs: short description, catalog install, common heading names.
+- The update notice and the bug report use the catalog this copy came from.
 
 ## [0.7.2] - 2026-11-08
 - `handoff-done`: the first result wins.
+- README: marks which password manager CLIs were tested for real, and Windows 11 with the desktop app.
 
 ## [0.7.1] - 2026-11-07
 - Windows: the brief no longer says the window closes in 20 seconds.
