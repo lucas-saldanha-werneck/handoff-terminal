@@ -1,8 +1,22 @@
 # handoff-terminal
 
+[![CI](https://github.com/lucas-saldanha-werneck/handoff-terminal/actions/workflows/test.yml/badge.svg)](https://github.com/lucas-saldanha-werneck/handoff-terminal/actions/workflows/test.yml)
+[![License](https://img.shields.io/github/license/lucas-saldanha-werneck/handoff-terminal)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.7.9-blue)](CHANGELOG.md)
+
 When the Claude desktop app won't type your password, personal data, API key or payment details,
 a terminal Claude Code session does that one step, and the app carries on with the rest of your
 request.
+
+[![handoff-terminal demo: tap to open the video](https://github.com/user-attachments/assets/67ff0f15-6f49-4c97-ae07-774fa3334a14)](https://lucas-saldanha-werneck.github.io/handoff-terminal/demo.mp4)
+
+<table>
+<tr>
+<td align="center"><img src="https://github.com/user-attachments/assets/dbfddf59-ff96-4abf-9a35-33a1516287c5" alt="The desktop app handing off the sign-in step" width="320"><br>In the desktop app</td>
+<td align="center"><img src="https://github.com/user-attachments/assets/1cd30c12-b006-4738-9de2-df3824ef70da" alt="The terminal session signing in" width="320"><br>In the terminal</td>
+<td align="center"><img src="https://github.com/user-attachments/assets/44de2288-dd0a-4edd-bedd-04af7a1ad533" alt="Summary: the terminal signs in, the app carries on" width="320"><br>The idea in short</td>
+</tr>
+</table>
 
 ```
 desktop app                                   terminal (tmux, Remote Control)
@@ -255,6 +269,10 @@ Logs are in `~/.claude/state/handoff-terminal/handoff.log`.
 ```
 python3 tests/test_handoff.py -v
 ```
+
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License
 
