@@ -512,6 +512,14 @@ class DoneWaitTest(unittest.TestCase):
         self.assertNotIn("\n", note)
         self.assertLessEqual(len(note), 300)
 
+    def test_note_secrets_are_masked(self):
+        self.cmd("handoff-done", "id-8", "ok", "signed in, password is hunter2xyz and key %s" % FAKE_SK)
+        with open(os.path.join(self.tmp.name, "result-id-8.json"), encoding="utf-8") as f:
+            note = json.load(f)["note"]
+        self.assertNotIn("hunter2xyz", note)
+        self.assertNotIn(FAKE_SK, note)
+        self.assertIn("signed in", note)
+
     def test_compact_json_is_read(self):
         with open(os.path.join(self.tmp.name, "result-id-5.json"), "w") as f:
             f.write('{"id":"id-5","status":"ok","note":"x"}')

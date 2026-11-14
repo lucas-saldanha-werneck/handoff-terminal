@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/lucas-saldanha-werneck/handoff-terminal/actions/workflows/test.yml/badge.svg)](https://github.com/lucas-saldanha-werneck/handoff-terminal/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/lucas-saldanha-werneck/handoff-terminal)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.10-blue)](CHANGELOG.md)
-[![SkillEvaluator](https://img.shields.io/badge/SkillEvaluator-8%2F8-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
-[![bug score](https://img.shields.io/badge/skill%20score-96.2%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
+[![Version](https://img.shields.io/badge/version-0.7.11-blue)](CHANGELOG.md)
+[![SkillEvaluator](https://img.shields.io/badge/SkillEvaluator-13%2F13-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
+[![bug skill score](https://img.shields.io/badge/bug%20skill%20score-96.2%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
 [![plugin score (proposal)](https://img.shields.io/badge/plugin%20score%20(proposal)-96.2%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator/issues/508)
 
 When the Claude desktop app won't type your password, personal data, API key or payment details,

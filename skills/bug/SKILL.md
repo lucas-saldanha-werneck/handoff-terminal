@@ -3,7 +3,7 @@ name: bug
 description: 'Report a handoff-terminal bug on GitHub. Use when the user wants to report a problem with the handoff-terminal plugin. Collects the versions and a log with sites, ids and paths removed, shows the user the report, and sends it only after a clear yes.'
 argument-hint: "[what went wrong]"
 disable-model-invocation: true
-version: "0.7.10"
+version: "0.7.11"
 metadata:
   author: Lucas Saldanha Werneck <lucas@2olhares.com>
   tags: [bug-report, github, support]
