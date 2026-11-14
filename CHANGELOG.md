@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.11] - 2026-11-14
+- `handoff-done` masks secret-looking text in the note it sends back to the app, in code, before cutting it to 300 characters.
+- README: SkillEvaluator badge 13/13; the score badge is labelled as the bug skill's score.
+
 ## [0.7.10] - 2026-11-13
 - Bug skill: the description says when to use it; version and tags; Purpose, Prerequisites, Limitations and Troubleshooting sections.
 - README: demo video, plugin check and skill score badges; adds SECURITY.md.

@@ -69,7 +69,7 @@ def main():
         print(__doc__.strip())
         return 2
     hid, status = args[0], args[1]
-    note = c.one_line(" ".join(args[2:]), 300)
+    note = c.one_line(c.mask_secrets(" ".join(args[2:])), 300)
     c.ensure_state()
     path = c.result_path(hid)
     if not c.write_private_once(path, json.dumps(
