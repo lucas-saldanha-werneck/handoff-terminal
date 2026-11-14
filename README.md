@@ -5,6 +5,7 @@
 [![Version](https://img.shields.io/badge/version-0.7.11-blue)](CHANGELOG.md)
 [![SkillEvaluator](https://img.shields.io/badge/SkillEvaluator-13%2F13-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
 [![bug skill score](https://img.shields.io/badge/bug%20skill%20score-96.2%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
+[![plugin score (proposal)](https://img.shields.io/badge/plugin%20score%20(proposal)-96.2%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator/issues/508)
 
 When the Claude desktop app won't type your password, personal data, API key or payment details,
 a terminal Claude Code session does that one step, and the app carries on with the rest of your
