@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/lucas-saldanha-werneck/handoff-terminal/actions/workflows/test.yml/badge.svg)](https://github.com/lucas-saldanha-werneck/handoff-terminal/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/lucas-saldanha-werneck/handoff-terminal)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.11-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue)](CHANGELOG.md)
 [![SkillEvaluator](https://img.shields.io/badge/SkillEvaluator-13%2F13-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
 [![bug skill score](https://img.shields.io/badge/bug%20skill%20score-96.2%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator)
 [![plugin score (proposal)](https://img.shields.io/badge/plugin%20score%20(proposal)-96.2%20A-brightgreen)](https://github.com/NVIDIA/SkillEvaluator/issues/508)
@@ -211,6 +211,46 @@ To send a whole request to the terminal yourself, start the message with `termin
 terminal: sign in to example.com and download my invoices
 ```
 
+### Local admin commands
+
+Some commands on your own computer need the administrator password (`sudo`), and Claude does not type
+it. You can approve a short list of them. Claude then ends its reply with
+
+```
+HANDOFF-TERMINAL: local | sudo renice 0 -p 1234 5678
+```
+
+and the hook runs that one command itself. No terminal session starts and no model sees the
+password: `sudo -A` gets it from your own askpass program, which reads it from your password manager.
+This works in terminal sessions too, not only in the desktop app. macOS and Linux.
+
+Off by default. Set both options:
+
+- `sudo_commands`: the commands you approve, comma separated, for example
+  `renice, pmset, kill, shutdown -r`. An entry can fix the first arguments: `shutdown -r` allows a
+  restart but not `shutdown -h`.
+- `sudo_askpass`: a program that prints the password and nothing else, for example a two-line script
+  with `exec op read "op://Vault/My Mac/password"`. Keep it readable and runnable only by you
+  (`chmod 700`).
+
+What the code checks before anything runs:
+
+- **You approved it.** The command must start with an entry of your list. Anything else is refused,
+  and Claude is told not to try another way.
+- **You named it.** Your own messages in that conversation must contain the command's name
+  ("renice") or the word "sudo". A web page or a tool result cannot do that for you; Claude then asks
+  you to confirm by name ("yes, renice").
+- **No shell.** The line is split into arguments and run as is. Pipes, `;`, `&&`, `$(...)`,
+  redirects and wildcards are refused, so one approved command cannot carry another.
+- **The system's program.** The command is looked up only in `/usr/bin`, `/bin`, `/usr/sbin` and
+  `/sbin`: a look-alike earlier in your `PATH` never runs as root.
+- **Once.** The same command does not run again until you write something new.
+
+Your list is the limit of what can go wrong, so keep it short and leave out anything that can run
+other programs (shells, interpreters, editors, `env`, `find`, `tee`, `cp`, `chmod`). The list and the
+askpass program are yours: whoever can change your plugin settings or that script can change what
+runs.
+
 ### Report a bug
 
 In Claude Code:
@@ -232,9 +272,10 @@ Plugin options (`/plugin configure handoff-terminal@lucas-tools`):
 - `notes_file`: your instructions for the terminal session. Default `~/.config/handoff-terminal/notes.md`.
 - `launcher`: the program that starts the session, called as `<folder> <name> <first message>`.
   Default `bin/handoff-launch` (tmux + `claude --remote-control --no-chrome`).
+- `sudo_commands` and `sudo_askpass`: see [Local admin commands](#local-admin-commands). Empty = off.
 
-Environment variables (advanced): `HANDOFF_SCOPE`, `HANDOFF_NOTES` and `HANDOFF_LAUNCHER` do the
-same as the options. `HANDOFF_STATE_DIR` (default `~/.claude/state/handoff-terminal`),
+Environment variables (advanced): `HANDOFF_SCOPE`, `HANDOFF_NOTES`, `HANDOFF_LAUNCHER`,
+`HANDOFF_SUDO_COMMANDS` and `HANDOFF_SUDO_ASKPASS` do the same as the options. `HANDOFF_STATE_DIR` (default `~/.claude/state/handoff-terminal`),
 `HANDOFF_WAIT_SECONDS` (default `1800`; a value that is not a whole number of seconds uses the
 default), `HANDOFF_LAUNCH_CHECK` (seconds the windowless launcher waits to check that the session
 is still running, default `5`), `HANDOFF_REMOTE_CONTROL=0` (start without Remote Control),

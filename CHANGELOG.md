@@ -2,6 +2,9 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-11-24
+- Local admin commands: `HANDOFF-TERMINAL: local | sudo <command>` runs one approved command with the administrator password, in the hook itself. No terminal session starts and no model sees the password: `sudo -A` reads it from your askpass program. Off until you set the new options `sudo_commands` (your approved list) and `sudo_askpass`. Checked in code: the command starts with an approved entry, your own messages name it (or say "sudo"), no shell syntax, the program comes from the system folders, and it does not run twice without a new message from you. Works in terminal sessions too.
+
 ## [0.7.11] - 2026-11-14
 - `handoff-done` masks secret-looking text in the note it sends back to the app, in code, before cutting it to 300 characters.
 - README: SkillEvaluator badge 13/13; the score badge is labelled as the bug skill's score.

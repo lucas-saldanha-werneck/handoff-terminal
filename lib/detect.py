@@ -54,6 +54,18 @@ _REFUSE_PT = (
     r"|\b(voce|vc) (mesmo|mesma) (precisa|tera|vai ter|deve)\b")
 REFUSE = re.compile(_REFUSE_EN + "|" + _REFUSE_PT)
 
+# The marker's site field for an admin command on this computer instead of a site.
+LOCAL = "local"
+LOCAL_NAMES = ("local", "localhost")
+# Words that mean "this needs the administrator password".
+ADMIN = re.compile(r"\b(sudo|admin(istrator)? password|root password|senha de admin\w*|senha do admin\w*|"
+                   r"senha de root)\b")
+
+
+def mentions_admin(text):
+    return bool(ADMIN.search(norm(text)))
+
+
 _SENTENCE = re.compile(r"(?<=[.!?;:])\s+|\n+")
 
 # The marker must be the last non-empty line: HANDOFF-TERMINAL: <site> | <step>
@@ -141,6 +153,9 @@ def parse_marker(text):
     if "|" not in body:
         return "", ""
     site, step = (part.strip(" `*_\"'") for part in body.split("|", 1))
+    if norm(site) in LOCAL_NAMES:
+        # Not a site: an admin command on this computer (lib/localcmd.py). The step is the command.
+        return (LOCAL, step[:300]) if step else ("", "")
     host = valid_host(site)
     if not host or not step:
         return "", ""
