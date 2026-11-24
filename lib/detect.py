@@ -54,11 +54,23 @@ _REFUSE_PT = (
     r"|\b(voce|vc) (mesmo|mesma) (precisa|tera|vai ter|deve)\b")
 REFUSE = re.compile(_REFUSE_EN + "|" + _REFUSE_PT)
 
+# The marker's site field for an admin command on this computer instead of a site.
+LOCAL = "local"
+LOCAL_NAMES = ("local", "localhost")
+# Words that mean "this needs the administrator password".
+ADMIN = re.compile(r"\b(sudo|admin(istrator)? password|root password|senha de admin\w*|senha do admin\w*|"
+                   r"senha de root)\b")
+
+
+def mentions_admin(text):
+    return bool(ADMIN.search(norm(text)))
+
+
 _SENTENCE = re.compile(r"(?<=[.!?;:])\s+|\n+")
 
 # The marker must be the last non-empty line: HANDOFF-TERMINAL: <site> | <step>
 _MARKER_LINE = re.compile(
-    r"^\s*[`*_\"']*" + MARKER + r"\s*:\s*(?P<body>.*?)\s*[`*_\"']*\s*$", re.I)
+    r"^\s*[`*_\"']*" + MARKER + r"\s*:\s*(?P<body>.*?)\s*(?P<tail>[`*_\"']*)\s*$", re.I)
 
 # Two-part public suffixes, so "zonasul.com.br" -> "zonasul" and "gov.uk" sites work.
 _SUFFIX2 = {"com.br", "net.br", "org.br", "gov.br", "edu.br", "co.uk", "org.uk", "gov.uk", "ac.uk",
@@ -140,7 +152,20 @@ def parse_marker(text):
     body = m.group("body")
     if "|" not in body:
         return "", ""
-    site, step = (part.strip(" `*_\"'") for part in body.split("|", 1))
+    site, raw_step = body.split("|", 1)
+    site, step = site.strip(" `*_\"'"), raw_step.strip(" `*_\"'")
+    if norm(site) in LOCAL_NAMES:
+        # Not a site: an admin command on this computer (lib/localcmd.py). The step is the command,
+        # whole: only spaces and backticks come off the ends (a closing quote is part of an argument),
+        # and it is never cut (a cut PID is another PID). localcmd.parse refuses one that is too long.
+        step = raw_step.strip(" \t`")
+        for ch in m.group("tail"):
+            # The line's closing markup may have taken an argument's closing quote: give it back
+            # while that quote is left open.
+            if ch not in "\"'" or step.count(ch) % 2 == 0:
+                break
+            step += ch
+        return (LOCAL, step) if step else ("", "")
     host = valid_host(site)
     if not host or not step:
         return "", ""

@@ -33,6 +33,19 @@ NOTE = (
     "HANDOFF-TERMINAL: <site domain> | <step, e.g. sign in to the user's account>. "
     "A hook starts the terminal session and tells you how to continue." + _tail)
 
+def local_note():
+    """How to ask for an approved admin command, when the user set that up (lib/localcmd.py)."""
+    import localcmd as lc
+    if not lc.configured():
+        return ""
+    return ("handoff-terminal can run an administrator (sudo) command on this computer for you, without "
+            "you or the user typing the password: one of the commands the user approved (%s). If this "
+            "task needs one, end your reply with one short sentence and this exact last line, as plain "
+            "text: HANDOFF-TERMINAL: local | sudo <command and arguments>. One plain command, no pipes "
+            "or variables. A hook runs it and tells you the result."
+            % ", ".join(" ".join(e) for e in lc.approved()))
+
+
 CRED_TOOLS = ("request_credentials", "autofill_credential")
 
 
@@ -53,20 +66,27 @@ def tool_failed(response):
 
 
 def main():
-    if not c.is_app_session():
-        return
     data = c.read_stdin_json(sys.stdin)
     if not data:
         return
     event = data.get("hook_event_name")
-    tool = str(data.get("tool_name") or "")
-    if event == "UserPromptSubmit":
-        prompt = data.get("prompt")
-        if d.mentions_sensitive(prompt) or (c.SCOPE == "all" and d.action_kinds(prompt)):
-            c.context(event, NOTE)
-    elif event in ("PostToolUseFailure", "PostToolUse") and tool.endswith(CRED_TOOLS):
-        if event == "PostToolUseFailure" or tool_failed(data.get("tool_response")):
-            c.context(event, "The password-manager request failed. " + NOTE)
+    notes = []
+    if event == "UserPromptSubmit" and not os.environ.get("HANDOFF_CHILD") and d.mentions_admin(data.get("prompt")):
+        note = local_note()  # terminal sessions too: the model does not type that password anywhere
+        if note:
+            notes.append(note)
+    if c.is_app_session():
+        # Not an "else": a sign-in request that also says "admin password" needs both notes.
+        tool = str(data.get("tool_name") or "")
+        if event == "UserPromptSubmit":
+            prompt = data.get("prompt")
+            if d.mentions_sensitive(prompt) or (c.SCOPE == "all" and d.action_kinds(prompt)):
+                notes.append(NOTE)
+        elif event in ("PostToolUseFailure", "PostToolUse") and tool.endswith(CRED_TOOLS):
+            if event == "PostToolUseFailure" or tool_failed(data.get("tool_response")):
+                notes.append("The password-manager request failed. " + NOTE)
+    if notes:
+        c.context(event, "\n\n".join(notes))
 
 
 if __name__ == "__main__":

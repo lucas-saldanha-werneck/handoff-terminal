@@ -1,6 +1,6 @@
 {
   "name": "handoff-terminal",
-  "version": "0.7.11",
+  "version": "0.8.0",
   "description": "A terminal session does the sign-in steps the desktop app refuses.",
   "author": {
     "name": "Lucas Saldanha Werneck",
@@ -13,7 +13,14 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "python3", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/update_check.py"], "timeout": 5 }
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/update_check.py"
+            ],
+            "timeout": 5
+          }
         ]
       }
     ]
@@ -47,6 +54,18 @@
       "type": "string",
       "title": "Setup notes file (optional)",
       "description": "Markdown file with your own instructions for the terminal session: which password manager CLI and which browser to use. Empty = ~/.config/handoff-terminal/notes.md",
+      "default": ""
+    },
+    "sudo_commands": {
+      "type": "string",
+      "title": "Local admin commands you approve (optional)",
+      "description": "Comma-separated commands that may run with sudo on this computer when you ask, e.g. \"renice, pmset, kill, shutdown -r\". An entry can fix the first arguments. Empty = off. Needs sudo_askpass too.",
+      "default": ""
+    },
+    "sudo_askpass": {
+      "type": "string",
+      "title": "Askpass program for sudo (optional)",
+      "description": "Program that prints your administrator password from your password manager (the SUDO_ASKPASS contract). sudo calls it; the model never sees the password. Empty = off.",
       "default": ""
     }
   }
