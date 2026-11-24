@@ -54,18 +54,32 @@ def text_of(content):
 
 def user_prompts(path):
     """The user's own typed messages, oldest first (tool results and injected text left out)."""
+    return [text for _, text in user_prompts_at(path)]
+
+
+def user_prompts_at(path):
+    """Like user_prompts, as (byte offset of the message in the transcript, text) pairs. The offset
+    stays the same for a message however long the transcript grows, unlike its index in the tail."""
     out = []
     try:
         with open(path, "rb") as f:
             f.seek(0, os.SEEK_END)
             size = f.tell()
-            f.seek(max(0, size - TAIL_BYTES))
-            raw = f.read().decode("utf-8", "replace").splitlines()
+            start = max(0, size - TAIL_BYTES)
+            f.seek(start)
+            data = f.read()
     except OSError:
         return out
-    if size > TAIL_BYTES and raw:
+    pos, raw = start, []
+    for chunk in data.split(b"\n"):
+        raw.append((pos, chunk))
+        pos += len(chunk) + 1
+    if start > 0 and raw:
         raw = raw[1:]  # first line may be cut in half
-    for line in raw:
+    for at, chunk in raw:
+        line = chunk.decode("utf-8", "replace").strip()
+        if not line:
+            continue
         try:
             entry = json.loads(line)
         except ValueError:
@@ -76,7 +90,7 @@ def user_prompts(path):
             continue  # a /compact summary is written by the model, not typed by the user
         text = text_of((entry.get("message") or {}).get("content")).strip()
         if text and not text.startswith(NOT_USER):
-            out.append(text)
+            out.append((at, text))
     return out
 
 
@@ -348,20 +362,25 @@ def handle_local(data, sid, step):
         c.log("held local sid=%s cmd=%s reason=not-approved" % (sid, argv[0]))
         if once(sid, "local", "no" + cmd):
             c.context("Stop", "handoff-terminal: I did not run `%s`: it is not one of the commands the user "
-                              "approved (%s). Tell the user in one short sentence; only they change that "
-                              "list. Do not try the command another way." % (cmd, listed))
+                              "approved (%s; an entry with fixed arguments allows no other options). Tell "
+                              "the user in one short sentence; only they change that list. Do not try the "
+                              "command another way." % (cmd, listed))
         return
-    users = user_prompts(data.get("transcript_path") or "")
+    at_users = user_prompts_at(data.get("transcript_path") or "")
+    users = [text for _, text in at_users]
     if not lc.named_by_user(argv, users):
         c.log("held local sid=%s cmd=%s reason=not-named-by-user" % (sid, argv[0]))
         if once(sid, "local", "name" + argv[0]):
             c.context("Stop", "handoff-terminal: I did not run `%s`, because the user has not written "
-                              "`%s` (or \"sudo\") in this conversation. Ask the user, in one short sentence, "
-                              "to confirm by replying with the command name (for example \"yes, %s\"). "
-                              "After they confirm, write the HANDOFF-TERMINAL line again."
+                              "`%s` in this conversation (or \"sudo\" in their latest message). Ask the user, "
+                              "in one short sentence, to confirm by replying with the command name (for "
+                              "example \"yes, %s\"). After they confirm, write the HANDOFF-TERMINAL line again."
                       % (cmd, argv[0], argv[0]))
         return
-    done = c.state_path("repeat-%s-%s" % (sid, c.digest(cmd + "|" + (users[-1] if users else ""))))
+    # Keyed by WHERE the latest user message is, not by its text: the same words written again
+    # ("yes, renice") are a new message and a new yes.
+    last_at = at_users[-1][0] if at_users else -1
+    done = c.state_path("repeat-%s-%s" % (sid, c.digest("%s|%d" % (cmd, last_at))))
     if os.path.exists(done):
         c.log("held local sid=%s cmd=%s reason=repeat-without-new-user-message" % (sid, argv[0]))
         if once(sid, "local", "again" + cmd):
@@ -375,12 +394,18 @@ def handle_local(data, sid, step):
             c.context("Stop", "handoff-terminal: `%s` is not in the system folders (%s), so I did not run "
                               "it. Tell the user in one short sentence." % (argv[0], lc.SAFE_PATH))
         return
-    c.write_private(done, "")
     if c.dry_run():
-        rc, out = 0, "DRY " + " ".join(shlex.quote(x) for x in [lc.SUDO, "-A", "--", prog] + argv[1:])
+        # Tests only: HANDOFF_DRY_EXIT stands in for the exit code sudo would have given.
+        exit_code = os.environ.get("HANDOFF_DRY_EXIT", "0")
+        rc = int(exit_code) if exit_code.isdigit() else None
+        out = "DRY " + " ".join(shlex.quote(x) for x in [lc.SUDO, "-A", "--", prog] + argv[1:])
     else:
         rc, out = lc.run(argv, prog, helper)
     c.log("local sid=%s cmd=%s exit=%s" % (sid, argv[0], rc))
+    if rc == 0 or out.startswith(lc.STILL_RUNNING):
+        # Only a command that worked (or is still running) counts as done; a failed one may be tried
+        # again after a fix.
+        c.write_private(done, "")
     if rc == 0:
         c.context("Stop", "handoff-terminal: ran `%s` with the administrator password from the user's "
                           "password manager: exit 0. Output: %s. Check that it had the effect you wanted, "

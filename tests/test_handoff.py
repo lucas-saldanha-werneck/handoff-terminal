@@ -8,6 +8,7 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -914,6 +915,29 @@ class LocalCommandTest(unittest.TestCase):
         self.assertEqual(d.parse_marker("HANDOFF-TERMINAL: local |"), ("", ""))
         self.assertEqual(d.parse_marker("HANDOFF-TERMINAL: this mac | sudo renice 0 -p 1"), ("", ""))
 
+    def test_long_local_step_is_refused_never_cut(self):
+        # 1: a cut command runs as another command ("-p 12345" cut to "-p 12").
+        pids = " ".join(str(10000 + i) for i in range(60))  # about 360 characters
+        site, step = d.parse_marker("HANDOFF-TERMINAL: local | sudo renice 0 -p " + pids)
+        self.assertEqual(step, "sudo renice 0 -p " + pids, "the whole step, not the first 300 characters")
+        self.assertEqual(self.lc.parse(step)[0][-1], "10059")
+        too_long = "sudo renice 0 -p " + " ".join(["12345"] * 400)
+        site, step = d.parse_marker("HANDOFF-TERMINAL: local | " + too_long)
+        self.assertEqual(step, too_long)
+        argv, why = self.lc.parse(step)
+        self.assertIsNone(argv)
+        self.assertIn("longer than %d characters" % self.lc.MAX_STEP, why)
+
+    def test_local_step_keeps_its_closing_quote(self):
+        # 8: only spaces and backticks come off the ends of a local step.
+        step = d.parse_marker('HANDOFF-TERMINAL: local | sudo pmset schedule wake "12/01/26 08:00:00"')[1]
+        self.assertEqual(step, 'sudo pmset schedule wake "12/01/26 08:00:00"')
+        self.assertEqual(self.lc.parse(step)[0], ["pmset", "schedule", "wake", "12/01/26 08:00:00"])
+        self.assertEqual(d.parse_marker("HANDOFF-TERMINAL: local | `sudo kill 1` ")[1], "sudo kill 1")
+        self.assertEqual(d.parse_marker("**HANDOFF-TERMINAL: local | sudo kill 1**")[1], "sudo kill 1")
+        self.assertEqual(d.parse_marker("HANDOFF-TERMINAL: local | sudo pmset -a womp '1'")[1],
+                         "sudo pmset -a womp '1'")
+
     def test_parse_plain_commands(self):
         self.assertEqual(self.lc.parse("sudo renice 0 -p 123 456"), (["renice", "0", "-p", "123", "456"], ""))
         self.assertEqual(self.lc.parse("`shutdown -r now`")[0], ["shutdown", "-r", "now"])
@@ -936,6 +960,16 @@ class LocalCommandTest(unittest.TestCase):
         self.assertIsNone(self.lc.match(["sh", "-c", "renice 0 -p 1"], entries))
         self.assertIsNone(self.lc.match(["renicer"], entries))
 
+    def test_fixed_arguments_allow_no_extra_options(self):
+        # 4: `shutdown -r -h now` starts with "shutdown -r" but is not a restart.
+        entries = self.lc._split_list("renice, shutdown -r")
+        self.assertIsNone(self.lc.match(["shutdown", "-r", "-h", "now"], entries))
+        self.assertIsNone(self.lc.match(["shutdown", "-r", "now", "--halt"], entries))
+        self.assertEqual(self.lc.match(["shutdown", "-r", "now"], entries), ["shutdown", "-r"])
+        self.assertEqual(self.lc.match(["shutdown", "-r", "+5"], entries), ["shutdown", "-r"])
+        self.assertEqual(self.lc.match(["renice", "-n", "5", "-p", "1"], entries), ["renice"],
+                         "a bare command name still takes any options")
+
     def test_user_must_name_the_command(self):
         argv = ["renice", "0", "-p", "1"]
         self.assertTrue(self.lc.named_by_user(argv, ["please renice them back"]))
@@ -943,6 +977,15 @@ class LocalCommandTest(unittest.TestCase):
         self.assertFalse(self.lc.named_by_user(argv, ["fix the priorities"]))
         self.assertFalse(self.lc.named_by_user(argv, ["the reniced ones", "pseudo code"]))
         self.assertFalse(self.lc.named_by_user(["kill", "1"], ["a skill for that", "kill-switch? no: killall"]))
+
+    def test_sudo_counts_only_in_the_latest_user_message(self):
+        # 6: an old "sudo" (a refusal, a pasted log) does not approve every listed command.
+        argv = ["kill", "-9", "1"]
+        self.assertFalse(self.lc.named_by_user(argv, ["do not use sudo for anything", "ok, fix it"]))
+        self.assertFalse(self.lc.named_by_user(argv, ["log: sudo: 3 incorrect password attempts", "go on"]))
+        self.assertTrue(self.lc.named_by_user(argv, ["fix it", "fine, use sudo"]))
+        self.assertTrue(self.lc.named_by_user(argv, ["kill it", "go on"]), "the name counts in any message")
+        self.assertFalse(self.lc.named_by_user(argv, []))
 
     @unittest.skipIf(os.name == "nt", "sudo is for macOS and Linux")
     def test_program_comes_from_the_system_folders_only(self):
@@ -974,6 +1017,53 @@ class LocalCommandTest(unittest.TestCase):
                 self.lc.SUDO = old
         self.assertEqual(rc, 3)
         self.assertEqual(out, "askpass=/x/askpass arg=-A arg=-- arg=/bin/kill arg=-9 arg=1 2")
+
+    def fake_sudo(self, tmp, body):
+        fake = os.path.join(tmp, "sudo")
+        with open(fake, "w") as f:
+            f.write("#!/bin/sh\n" + body + "\n")
+        os.chmod(fake, 0o755)
+        return fake
+
+    @unittest.skipIf(os.name == "nt", "sudo is for macOS and Linux")
+    def test_run_returns_at_the_timeout_without_stopping_the_command(self):
+        # 2: the command runs as root, so the hook cannot stop it; it must not wait for it either.
+        with tempfile.TemporaryDirectory() as tmp:
+            mark = os.path.join(tmp, "finished")
+            fake = self.fake_sudo(tmp, 'echo started; sleep 2; echo yes > "%s"' % mark)
+            old = self.lc.SUDO, self.lc.RUN_TIMEOUT
+            self.lc.SUDO, self.lc.RUN_TIMEOUT = fake, 0.5
+            try:
+                t0 = time.time()
+                rc, out = self.lc.run(["kill", "1"], "/bin/kill", "/x/askpass")
+                took = time.time() - t0
+            finally:
+                self.lc.SUDO, self.lc.RUN_TIMEOUT = old
+            self.assertIsNone(rc)
+            self.assertTrue(out.startswith(self.lc.STILL_RUNNING), out)
+            self.assertIn("not stopped", out)
+            self.assertLess(took, 1.8, "returned at the timeout, without waiting for the command")
+            for _ in range(60):  # it was left running and finishes on its own
+                if os.path.exists(mark):
+                    break
+                time.sleep(0.1)
+            self.assertTrue(os.path.exists(mark), "the command was stopped")
+
+    @unittest.skipIf(os.name == "nt", "sudo is for macOS and Linux")
+    def test_run_masks_secrets_before_cutting_the_output(self):
+        # 7: cut first, and a key that crosses character 300 is left half there and unmasked.
+        key = "ghp_" + "A1b2C3d4E5" * 4
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = self.fake_sudo(tmp, "printf '%%s %%s\\n' '%s' '%s'" % ("x" * 280, key))
+            old, self.lc.SUDO = self.lc.SUDO, fake
+            try:
+                rc, out = self.lc.run(["kill", "1"], "/bin/kill", "/x/askpass")
+            finally:
+                self.lc.SUDO = old
+        self.assertEqual(rc, 0)
+        self.assertNotIn("ghp_", out)
+        self.assertNotIn("A1b2C3", out)
+        self.assertIn("[secret removed]", out)
 
 
 @unittest.skipIf(os.name == "nt", "sudo is for macOS and Linux")
@@ -1063,6 +1153,57 @@ class LocalHookTest(HookRun):
         self.assertIn("already ran", out)
         self.assertNotIn("DRY", out)
         self.assertIn("ran `sudo renice", self.ctx(self.stop(self.LAST, prompts=("renice them", "again, renice"))))
+
+    def test_the_same_words_again_are_a_new_message(self):
+        # 5: the repeat lock follows where the latest user message is, not its text.
+        self.assertIn("ran `sudo renice", self.ctx(self.stop(self.LAST, prompts=("yes, renice",))))
+        self.assertIn("already ran", self.ctx(self.stop(self.LAST, prompts=("yes, renice",))))
+        out = self.ctx(self.stop(self.LAST, prompts=("yes, renice", "yes, renice")))
+        self.assertIn("ran `sudo renice", out)
+
+    def test_a_failed_command_can_be_tried_again(self):
+        # 5: only exit 0 marks the command as done.
+        self.env["HANDOFF_DRY_EXIT"] = "1"
+        out = self.ctx(self.stop(self.LAST, prompts=("renice them",)))
+        self.assertIn("did not work (exit 1)", out)
+        self.env["HANDOFF_DRY_EXIT"] = "0"
+        self.assertIn("ran `sudo renice", self.ctx(self.stop(self.LAST, prompts=("renice them",))))
+        self.assertIn("already ran", self.ctx(self.stop(self.LAST, prompts=("renice them",))))
+
+    def test_long_command_is_refused_not_cut(self):
+        # 1: through the hook, too.
+        last = "x\nHANDOFF-TERMINAL: local | sudo renice 0 -p " + " ".join(["12345"] * 400)
+        out = self.ctx(self.stop(last, prompts=("renice them",)))
+        self.assertIn("longer than 2000 characters", out)
+        self.assertNotIn("DRY", out)
+
+    def test_fixed_arguments_with_an_extra_option_are_held(self):
+        # 4: through the hook, too.
+        out = self.ctx(self.stop("x\nHANDOFF-TERMINAL: local | sudo shutdown -r -h now", prompts=("shutdown",)))
+        self.assertIn("not one of the commands", out)
+        self.assertNotIn("DRY", out)
+
+    def test_an_old_sudo_does_not_approve_a_command(self):
+        # 6: "sudo" in an earlier message is not a yes for a command the user never named.
+        out = self.ctx(self.stop("x\nHANDOFF-TERMINAL: local | sudo kill -9 1",
+                                 prompts=("do not use sudo here", "ok, clean it up")))
+        self.assertIn("has not written `kill`", out)
+        self.assertIn("latest message", out)
+        self.assertNotIn("DRY", out)
+
+    def test_nudge_sends_both_notes_for_a_sign_in_that_asks_for_the_admin_password(self):
+        # 3: the sudo note does not replace the sign-in note in an app session.
+        payload = {"hook_event_name": "UserPromptSubmit",
+                   "prompt": "log into example.com; it also asks for my admin password"}
+        out = self.ctx(self.run_hook("nudge.py", payload))
+        self.assertIn("HANDOFF-TERMINAL: local | sudo", out)
+        self.assertIn("HANDOFF-TERMINAL: <site domain> |", out)
+        env = dict(self.env)
+        env.pop("HANDOFF_FORCE")  # a terminal session gets only the sudo note
+        env["CLAUDE_CODE_ENTRYPOINT"] = "cli"
+        out = self.ctx(self.run_hook("nudge.py", payload, env))
+        self.assertIn("HANDOFF-TERMINAL: local | sudo", out)
+        self.assertNotIn("<site domain>", out)
 
     def test_nudge_tells_the_model_only_when_set_up(self):
         payload = {"hook_event_name": "UserPromptSubmit", "prompt": "this needs sudo, can you do it?"}

@@ -70,21 +70,23 @@ def main():
     if not data:
         return
     event = data.get("hook_event_name")
+    notes = []
     if event == "UserPromptSubmit" and not os.environ.get("HANDOFF_CHILD") and d.mentions_admin(data.get("prompt")):
         note = local_note()  # terminal sessions too: the model does not type that password anywhere
         if note:
-            c.context(event, note)
-            return
-    if not c.is_app_session():
-        return
-    tool = str(data.get("tool_name") or "")
-    if event == "UserPromptSubmit":
-        prompt = data.get("prompt")
-        if d.mentions_sensitive(prompt) or (c.SCOPE == "all" and d.action_kinds(prompt)):
-            c.context(event, NOTE)
-    elif event in ("PostToolUseFailure", "PostToolUse") and tool.endswith(CRED_TOOLS):
-        if event == "PostToolUseFailure" or tool_failed(data.get("tool_response")):
-            c.context(event, "The password-manager request failed. " + NOTE)
+            notes.append(note)
+    if c.is_app_session():
+        # Not an "else": a sign-in request that also says "admin password" needs both notes.
+        tool = str(data.get("tool_name") or "")
+        if event == "UserPromptSubmit":
+            prompt = data.get("prompt")
+            if d.mentions_sensitive(prompt) or (c.SCOPE == "all" and d.action_kinds(prompt)):
+                notes.append(NOTE)
+        elif event in ("PostToolUseFailure", "PostToolUse") and tool.endswith(CRED_TOOLS):
+            if event == "PostToolUseFailure" or tool_failed(data.get("tool_response")):
+                notes.append("The password-manager request failed. " + NOTE)
+    if notes:
+        c.context(event, "\n\n".join(notes))
 
 
 if __name__ == "__main__":

@@ -227,8 +227,9 @@ This works in terminal sessions too, not only in the desktop app. macOS and Linu
 Off by default. Set both options:
 
 - `sudo_commands`: the commands you approve, comma separated, for example
-  `renice, pmset, kill, shutdown -r`. An entry can fix the first arguments: `shutdown -r` allows a
-  restart but not `shutdown -h`.
+  `renice, pmset, kill, shutdown -r`. An entry can fix the first arguments, and then no other options
+  may follow: `shutdown -r` allows `shutdown -r now` but not `shutdown -h` or `shutdown -r -h now`.
+  A bare name (`renice`) takes any arguments.
 - `sudo_askpass`: a program that prints the password and nothing else, for example a two-line script
   with `exec op read "op://Vault/My Mac/password"`. Keep it readable and runnable only by you
   (`chmod 700`).
@@ -238,13 +239,19 @@ What the code checks before anything runs:
 - **You approved it.** The command must start with an entry of your list. Anything else is refused,
   and Claude is told not to try another way.
 - **You named it.** Your own messages in that conversation must contain the command's name
-  ("renice") or the word "sudo". A web page or a tool result cannot do that for you; Claude then asks
+  ("renice"), or your latest message must say "sudo". An older "sudo" (say, "do not use sudo", or a
+  pasted log) does not count. A web page or a tool result cannot do that for you; Claude then asks
   you to confirm by name ("yes, renice").
 - **No shell.** The line is split into arguments and run as is. Pipes, `;`, `&&`, `$(...)`,
   redirects and wildcards are refused, so one approved command cannot carry another.
+- **Whole or not at all.** A command longer than 2000 characters is refused, never cut.
 - **The system's program.** The command is looked up only in `/usr/bin`, `/bin`, `/usr/sbin` and
   `/sbin`: a look-alike earlier in your `PATH` never runs as root.
-- **Once.** The same command does not run again until you write something new.
+- **Once.** The same command does not run again until you write a new message (the same words
+  again count as new). A command that failed can be tried again.
+
+The hook waits up to 30 seconds. A command still running then is left running, not stopped, and
+Claude is told so. Its output is masked for secret-looking text and cut to 300 characters.
 
 Your list is the limit of what can go wrong, so keep it short and leave out anything that can run
 other programs (shells, interpreters, editors, `env`, `find`, `tee`, `cp`, `chmod`). The list and the
